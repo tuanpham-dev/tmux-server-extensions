@@ -2,10 +2,11 @@
 // sit under a top-level extension/ folder, matching what tmux-server's
 // installFromTsixFile (server/src/extensions.ts) expects to unzip.
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { randomUUID } from "node:crypto";
 
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const distDir = path.join(repoRoot, "dist");
@@ -31,12 +32,19 @@ for (const name of EXTENSIONS) {
     mkdirSync(stagedRoot, { recursive: true });
     cpSync(srcDir, stagedRoot, { recursive: true });
 
+    // Zipped to a uniquely-named path inside dist/ itself (not workDir, whose
+    // filesystem may differ from dist/'s and make the rename below fail with
+    // EXDEV — see installFromTsixFile's own cp-not-rename comment for the
+    // same tradeoff), then moved into place with a same-directory atomic
+    // rename — two concurrent `npm run pack` runs would otherwise both write
+    // the same dist/<name>.tsix path and could interleave/corrupt output.
     const tsixName = `${name}-${version}.tsix`;
-    const tsixPath = path.join(distDir, tsixName);
-    rmSync(tsixPath, { force: true });
+    const stagedTsixPath = path.join(distDir, `.tmp-${randomUUID()}-${tsixName}`);
     try {
-      execFileSync("zip", ["-q", "-r", tsixPath, "extension"], { cwd: workDir });
+      execFileSync("zip", ["-q", "-r", stagedTsixPath, "extension"], { cwd: workDir });
+      renameSync(stagedTsixPath, path.join(distDir, tsixName));
     } catch (err) {
+      rmSync(stagedTsixPath, { force: true });
       if (err.code === "ENOENT") {
         throw new Error('packing extensions requires the "zip" command, which was not found on PATH');
       }
