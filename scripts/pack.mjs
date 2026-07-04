@@ -2,7 +2,7 @@
 // sit under a top-level extension/ folder, matching what tmux-server's
 // installFromTsixFile (server/src/extensions.ts) expects to unzip.
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,7 +10,13 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const distDir = path.join(repoRoot, "dist");
 
-const EXTENSIONS = ["dark-modern-theme", "light-modern-theme", "one-dark-pro-theme", "vscode-icons"];
+// Discovered rather than hardcoded — any top-level folder with a
+// package.json is an extension, so adding one under the repo root is picked
+// up automatically (mirrors tmux-server's own listFoldersIn/discoverExtensions
+// pattern in server/src/extensions.ts).
+const EXTENSIONS = readdirSync(repoRoot, { withFileTypes: true })
+  .filter((e) => e.isDirectory() && existsSync(path.join(repoRoot, e.name, "package.json")))
+  .map((e) => e.name);
 
 mkdirSync(distDir, { recursive: true });
 
@@ -28,7 +34,14 @@ for (const name of EXTENSIONS) {
     const tsixName = `${name}-${version}.tsix`;
     const tsixPath = path.join(distDir, tsixName);
     rmSync(tsixPath, { force: true });
-    execFileSync("zip", ["-q", "-r", tsixPath, "extension"], { cwd: workDir });
+    try {
+      execFileSync("zip", ["-q", "-r", tsixPath, "extension"], { cwd: workDir });
+    } catch (err) {
+      if (err.code === "ENOENT") {
+        throw new Error('packing extensions requires the "zip" command, which was not found on PATH');
+      }
+      throw err;
+    }
     console.log(`packed ${tsixName}`);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
