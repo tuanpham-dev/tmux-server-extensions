@@ -1,0 +1,37 @@
+{
+  "name": "one-dark-pro-theme",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "3.19.0",
+  "displayName": "One Dark Pro",
+  "description": "Binaryify/OneDark-Pro color theme, all upstream variants (bundled — MIT, see LICENSE.txt).",
+  "contributes": {
+    "themes": [
+      {
+        "label": "One Dark Pro",
+        "uiTheme": "vs-dark",
+        "path": "./themes/OneDark-Pro.json"
+      },
+      {
+        "label": "One Dark Pro Flat",
+        "uiTheme": "vs-dark",
+        "path": "./themes/OneDark-Pro-flat.json"
+      },
+      {
+        "label": "One Dark Pro Darker",
+        "uiTheme": "vs-dark",
+        "path": "./themes/OneDark-Pro-darker.json"
+      },
+      {
+        "label": "One Dark Pro Mix",
+        "uiTheme": "vs-dark",
+        "path": "./themes/OneDark-Pro-mix.json"
+      },
+      {
+        "label": "One Dark Pro Night Flat",
+        "uiTheme": "vs-dark",
+        "path": "./themes/OneDark-Pro-night-flat.json"
+      }
+    ]
+  }
+}

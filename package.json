@@ -1,0 +1,9 @@
+{
+  "name": "tmux-server-extensions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Optional tmux-server extensions, packaged as installable .tsix files.",
+  "scripts": {
+    "pack": "node scripts/pack.mjs"
+  }
+}

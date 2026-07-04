@@ -1,0 +1,17 @@
+{
+  "name": "vscode-icons",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "12.19.0",
+  "displayName": "VSCode Icons",
+  "description": "vscode-icons-team/vscode-icons file-icon theme (bundled — MIT, see LICENSE.txt).",
+  "contributes": {
+    "iconThemes": [
+      {
+        "id": "vscode-icons",
+        "label": "VSCode Icons",
+        "path": "./theme/vsicons-icon-theme.json"
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "light-modern-theme",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Light Modern",
+  "description": "VS Code's Light Modern color theme (flattened from microsoft/vscode, MIT, see LICENSE.txt).",
+  "contributes": {
+    "themes": [
+      {
+        "label": "Light Modern",
+        "uiTheme": "vs",
+        "path": "./themes/light-modern-color-theme.json"
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "dark-modern-theme",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Dark Modern",
+  "description": "VS Code's Dark Modern color theme (flattened from microsoft/vscode, MIT, see LICENSE.txt).",
+  "contributes": {
+    "themes": [
+      {
+        "label": "Dark Modern",
+        "uiTheme": "vs-dark",
+        "path": "./themes/dark-modern-color-theme.json"
+      }
+    ]
+  }
+}
