@@ -60,14 +60,46 @@
   flex: 0 0 auto;
 }
 
+/* Themed to match the host's .dialog-input/.settings-select — these are
+   standalone (not combined with the host classes), so they carry the full
+   input styling plus the manually-drawn dropdown arrow. Uses the host's CSS
+   custom properties so it tracks light/dark themes. */
 .one-hand-settings-select {
   flex: 1 1 auto;
   min-width: 0;
   max-width: 280px;
+  padding: 6px 34px 6px 8px;
+  background-color: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 13px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235f6672' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
+.one-hand-settings-select:focus {
+  border-color: var(--focus-border);
+  outline: none;
+}
+
+/* Mirrors the host's .dialog-button.secondary. */
 .one-hand-settings-restore {
   align-self: flex-start;
   margin-top: 4px;
   cursor: pointer;
+  padding: 6px 14px;
+  font-size: 13px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-bright);
+  border: 1px solid var(--fg-inactive);
+}
+
+.one-hand-settings-restore:hover {
+  background: var(--list-hover-bg);
 }
