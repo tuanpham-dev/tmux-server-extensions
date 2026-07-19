@@ -1,0 +1,54 @@
+name: Build & deploy registry to GitHub Pages
+
+# Rebuilds the .tsix catalog (dist/) with `npm run pack` and publishes it to
+# GitHub Pages, so the whole dist/ tree — index.json plus every .tsix, README,
+# and icon — is served over HTTPS as a tmux-server registry source. dist/ is
+# .gitignore'd and never committed; it is regenerated here on every push.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Least-privilege token the deploy-pages action needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One live deployment at a time; a newer push supersedes an in-flight run
+# rather than queueing behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # pack runs `npm run build` first (esbuild-bundles code extensions),
+      # then zips each extension into dist/<name>-<version>.tsix and writes
+      # dist/index.json — the catalog tmux-server's registry loader fetches.
+      - run: npm ci
+      - run: npm run pack
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

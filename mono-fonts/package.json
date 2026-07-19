@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "displayName": "Popular Monospace Fonts",
   "description": "Fira Code, JetBrains Mono, Cascadia Code, and Source Code Pro terminal fonts (bundled \u2014 OFL-1.1, see LICENSE-*.txt), each with core latin + latin-ext coverage across regular, medium, and bold (plus italic where the upstream family ships one).",
+  "icon": "./icon.svg",
   "contributes": {
     "fonts": [
       {

@@ -5,6 +5,7 @@
   "version": "3.19.0",
   "displayName": "One Dark Pro",
   "description": "Binaryify/OneDark-Pro color theme, all upstream variants (bundled — MIT, see LICENSE.txt).",
+  "icon": "./icon.png",
   "contributes": {
     "themes": [
       {

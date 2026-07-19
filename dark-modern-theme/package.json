@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "displayName": "Dark Modern",
   "description": "VS Code's Dark Modern color theme (flattened from microsoft/vscode, MIT, see LICENSE.txt).",
+  "icon": "./icon.svg",
   "contributes": {
     "themes": [
       {

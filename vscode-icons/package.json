@@ -4,7 +4,8 @@
   "publisher": "tmux-server",
   "version": "12.19.0",
   "displayName": "VSCode Icons",
-  "description": "vscode-icons-team/vscode-icons file-icon theme (bundled — MIT, see LICENSE.txt).",
+  "description": "vscode-icons/vscode-icons file-icon theme (bundled — MIT, see LICENSE.txt).",
+  "icon": "./icon.png",
   "contributes": {
     "iconThemes": [
       {

@@ -2,7 +2,18 @@
 // sit under a top-level extension/ folder, matching what tmux-server's
 // installFromTsixFile (server/src/extensions.ts) expects to unzip.
 import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +31,10 @@ const EXTENSIONS = readdirSync(repoRoot, { withFileTypes: true })
   .map((e) => e.name);
 
 mkdirSync(distDir, { recursive: true });
+
+// Entries for dist/index.json — the registry catalog tmux-server's server/src/registry.ts
+// reads for this repo's dist/ (or a hosted copy of it) as a registry source.
+const indexEntries = [];
 
 for (const name of EXTENSIONS) {
   const srcDir = path.join(repoRoot, name);
@@ -51,7 +66,45 @@ for (const name of EXTENSIONS) {
       throw err;
     }
     console.log(`packed ${tsixName}`);
+
+    // README/icon are copied out of the source folder (not the staged
+    // extension/ dir the .tsix was built from) — same files, but this way a
+    // future non-flat srcDir layout can't accidentally change these paths.
+    const entry = {
+      name: manifest.name,
+      publisher: manifest.publisher,
+      displayName: manifest.displayName || manifest.name,
+      description: manifest.description || "",
+      version,
+      file: tsixName,
+    };
+    const readmePath = path.join(srcDir, "README.md");
+    if (existsSync(readmePath)) {
+      const readmeName = `${name}-README.md`;
+      copyFileSync(readmePath, path.join(distDir, readmeName));
+      entry.readme = readmeName;
+    }
+    if (typeof manifest.icon === "string") {
+      const iconSrcPath = path.join(srcDir, manifest.icon);
+      if (existsSync(iconSrcPath)) {
+        const iconName = `${name}-icon${path.extname(manifest.icon)}`;
+        copyFileSync(iconSrcPath, path.join(distDir, iconName));
+        entry.icon = iconName;
+      } else {
+        console.warn(`${name}: manifest declares icon "${manifest.icon}" but the file is missing — skipping`);
+      }
+    }
+    indexEntries.push(entry);
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
 }
+
+// Atomic write, staged inside dist/ itself — same rationale as the .tsix
+// staging above (cross-filesystem rename safety + no interleaved writes from
+// concurrent pack runs).
+const indexJson = JSON.stringify({ extensions: indexEntries }, null, 2);
+const stagedIndexPath = path.join(distDir, `.tmp-${randomUUID()}-index.json`);
+writeFileSync(stagedIndexPath, indexJson);
+renameSync(stagedIndexPath, path.join(distDir, "index.json"));
+console.log(`wrote index.json (${indexEntries.length} extensions)`);
