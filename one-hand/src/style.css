@@ -1,0 +1,73 @@
+/* The swipe strip: a transparent, thumb-reachable band pinned to the bottom
+   edge of the editor area (its parent .app-overlay-layer is absolute inset:0,
+   pointer-events:none — so the strip re-enables pointer events for itself, and
+   only within this thin band). touch-action:none keeps the browser from
+   turning a swipe into a scroll. */
+.one-hand-swipe-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24px;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  /* Keep the OS/browser from selecting text or showing a callout on long-press
+     of the strip. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* A faint centered handle, the only visible hint the strip is there. */
+.one-hand-swipe-grabber {
+  width: 96px;
+  max-width: 40%;
+  height: 4px;
+  margin-bottom: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.18;
+}
+
+/* ---- Settings picker (registerSettingsComponent) ---- */
+
+.one-hand-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 480px;
+}
+
+.one-hand-settings-hint {
+  margin: 0 0 4px;
+  opacity: 0.75;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.one-hand-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.one-hand-settings-label {
+  flex: 0 0 auto;
+}
+
+.one-hand-settings-select {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 280px;
+}
+
+.one-hand-settings-restore {
+  align-self: flex-start;
+  margin-top: 4px;
+  cursor: pointer;
+}
