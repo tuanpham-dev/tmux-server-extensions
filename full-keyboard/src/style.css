@@ -1,0 +1,349 @@
+/* full-keyboard extension styles. The top-bar / key-button / editor / preview
+   rules are ported from extensions/touch-keys/src/style.css with classes
+   renamed .touch-key* -> .fk-key* so this extension styles itself even when
+   touch-keys is disabled. The .fk-keyboard* rules (the QWERTY grid) are new. */
+
+/* ---- Special-key top bar (ported from .touch-key-bar) ---- */
+
+/* The keyboard surface: the top bar + grid, stacked. In fixed mode it's the
+   in-flow flex child of .terminal-host (so the terminal shrinks above it); in
+   floating mode it fills the overlay panel. Its inline margin-left (fixed) or
+   the panel's inline left (floating) carries the full-bleed offset that widens
+   it out to the screen edge past the terminal area's inset. */
+.fk-surface {
+  flex-shrink: 0;
+}
+
+/* The special-key top bar, above the QWERTY grid. Swipes horizontally when the
+   keys don't fit — the buttons only fire on a still tap (see useTapHandlers),
+   so panning across them never sends. */
+.fk-key-bar {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.fk-key-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.fk-key {
+  /* Natural width, packed to the left — never shrink below the label; extra
+     keys overflow into the bar's horizontal scroll instead of squishing. */
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 8px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-bright);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.fk-key-ctrl.active,
+.fk-key-mic.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* ---- QWERTY grid (new) ---- */
+
+/* The QWERTY grid, below the top bar within .fk-surface. Fills the width; keys
+   size proportionally. */
+.fk-keyboard {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  user-select: none;
+  -webkit-touch-callout: none;
+  /* The grid manages its own key hit-testing; disable browser touch gestures
+     (double-tap zoom, long-press callout) over the whole keyboard. */
+  touch-action: none;
+}
+
+.fk-keyboard-row {
+  display: flex;
+  gap: 4px;
+}
+
+/* A non-interactive gap (leading/trailing on the home row, bracketing the
+   symbol page's ⌫) — sized by inline flex-grow so its row stays staggered and
+   its keys align with the columns above. No face of its own. */
+.fk-keyboard-spacer {
+  pointer-events: none;
+}
+
+.fk-keyboard-key {
+  /* flex-grow carries the key's relative width (1 for a letter, more for
+     space); min-width: 0 lets keys shrink to share a narrow phone row. */
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-bright);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+/* Modifier / utility keys (Shift, Ctrl, Alt, ?123, Backspace, Enter) read as
+   secondary — a dimmer face than the character keys they surround. */
+.fk-keyboard-key.fk-mod {
+  background: var(--panel-bg);
+  font-size: 13px;
+}
+
+/* An armed one-shot modifier (or the active symbol page) — same accent
+   treatment as the top bar's sticky Ctrl. */
+.fk-keyboard-key.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* ---- Floating mode: the ⌨ toggle and the overlay panel ---- */
+
+/* A movable AssistiveTouch-style toggle over the terminal (floating style).
+   Positioned via inline left/top computed from the terminal body's live rect
+   in FloatingKeyboard.tsx. */
+.fk-fab {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  color: var(--fg-bright);
+  font-size: 20px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Above the panel (z 6) so a tap always lands on the toggle to collapse. */
+  z-index: 6;
+}
+
+.fk-fab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+/* The expanded keyboard as an overlay over the terminal body — absolute (not
+   in flow) so, unlike fixed mode, it doesn't shrink the terminal. Spans the
+   full width; its vertical anchor (top or bottom) is set inline in
+   FloatingKeyboard.tsx so it opens adjacent to the toggle, above or below.
+   Holds the same .fk-key-bar + .fk-keyboard the docked mode renders; their
+   -8px inset (which cancels .terminal-host's padding in the bar slot) is reset
+   here since the panel spans the terminal body edge to edge itself. */
+.fk-floating-panel {
+  position: absolute;
+  /* left/right/top/bottom are set inline in FloatingKeyboard.tsx: left carries
+     the full-bleed offset (so the panel spans the screen edge to edge), and
+     top-vs-bottom anchors it above or below the toggle. */
+  z-index: 5;
+  /* Neutral (all-sides) shadow since the panel may sit above or below. */
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Top-keys layout editor (ported from .touch-key-editor*) ---- */
+
+.fk-key-editor-legend {
+  font-size: 11px;
+  color: var(--fg-dim);
+  font-weight: normal;
+  margin-bottom: 4px;
+}
+
+.fk-key-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fk-key-editor-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  flex-wrap: wrap;
+}
+
+.fk-key-editor-row.dragging {
+  opacity: 0.4;
+}
+
+/* 2px accent line on the edge a dragged row would land on — box-shadow
+   rather than a border so it doesn't shift row layout. */
+.fk-key-editor-row.drop-indicator-top {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.fk-key-editor-row.drop-indicator-bottom {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
+.fk-key-editor-grip {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  align-self: stretch;
+  color: var(--fg-dim);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.fk-key-editor-label {
+  width: 90px;
+}
+
+.fk-key-editor-send {
+  flex: 1;
+  min-width: 120px;
+  font-family: var(--font-mono, monospace);
+}
+
+.fk-key-editor-send.invalid {
+  border-color: var(--error, #e05252);
+}
+
+.fk-key-editor-when {
+  width: 200px;
+}
+
+.fk-key-editor-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.fk-key-editor-error {
+  flex-basis: 100%;
+  font-size: 11px;
+  color: var(--error, #e05252);
+}
+
+.fk-key-editor-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* Live preview of the top bar, filtered by the tag pills below — mirrors
+   .fk-key-bar's own padding/gap but sits inline in the settings panel. */
+.fk-key-preview {
+  margin-bottom: 10px;
+}
+
+.fk-key-preview-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.fk-key-preview-tag {
+  padding: 3px 10px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--fg-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.fk-key-preview-tag.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+
+.fk-key-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  min-height: 36px;
+}
+
+.fk-key-preview-bar .fk-key {
+  flex: 0 0 auto;
+  cursor: default;
+}
+
+.fk-key-preview-empty {
+  font-size: 11px;
+  color: var(--fg-dim);
+  align-self: center;
+}
+
+@media (max-width: 640px) {
+  /* The settings panel is too narrow for all four fields at their desktop
+     widths, so each shrinks to just enough for its typical content. */
+  .fk-key-editor-row {
+    padding: 4px;
+    gap: 4px;
+  }
+
+  .fk-key-editor-label {
+    flex: 0 0 44px;
+    width: 44px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .fk-key-editor-send {
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .fk-key-editor-when {
+    flex: 0 1 90px;
+    width: 90px;
+    min-width: 0;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  .fk-key-editor-error {
+    flex-basis: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

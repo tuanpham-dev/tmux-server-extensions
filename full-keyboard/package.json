@@ -1,0 +1,49 @@
+{
+  "name": "full-keyboard",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Full Keyboard",
+  "description": "A full on-screen QWERTY keyboard for mobile: number row, sticky Shift/Ctrl/Alt, two symbol pages, arrow/Backspace hold-to-repeat, and a customizable special-key top bar (Esc, Tab, arrows, voice, image). Fixed or floating; optionally hides the device's native keyboard while shown.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "Full Keyboard",
+      "properties": {
+        "fullKeyboard.show": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "always", "never"],
+          "enumItemLabels": ["Auto (mobile devices only)", "Always show", "Never show"],
+          "description": "When the on-screen keyboard shows for a focused terminal."
+        },
+        "fullKeyboard.style": {
+          "type": "string",
+          "default": "fixed",
+          "enum": ["fixed", "floating"],
+          "enumItemLabels": ["Fixed (docked below terminal)", "Floating (movable toggle)"],
+          "description": "Docked below the terminal (the terminal shrinks above it), or a movable toggle you tap to show the keyboard as an overlay that leaves the terminal full-size."
+        },
+        "fullKeyboard.suppressSoftKeyboard": {
+          "type": "string",
+          "default": "whenShown",
+          "enum": ["never", "whenShown", "always"],
+          "enumItemLabels": [
+            "Never — keep the OS keyboard",
+            "While the keyboard is showing (floating: only when expanded)",
+            "Always — even when the floating toggle is collapsed"
+          ],
+          "description": "When to hide the device's native on-screen keyboard. \"While showing\" keeps the OS keyboard available when the floating toggle is collapsed; \"Always\" hides it whenever the terminal is focused, so the floating toggle is your only keyboard. Fixed mode treats \"While showing\" and \"Always\" the same (it's always docked). The terminal stays focusable either way, so hardware keys and the mic key keep working."
+        },
+        "fullKeyboard.topKeys": {
+          "type": "string",
+          "default": "",
+          "description": "The special-key top bar layout, as JSON (edited with the layout editor below — empty means the default layout)."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js"
+  }
+}
