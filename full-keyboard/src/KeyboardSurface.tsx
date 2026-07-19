@@ -68,7 +68,7 @@ function TopBar({
           onToggleStickyCtrl={context.toggleStickyCtrl}
           onSendInput={context.sendInput}
           onSendVoiceText={context.sendText}
-          onUploadImage={context.uploadImage}
+          onUploadImages={context.uploadImages}
         />
       ))}
     </div>

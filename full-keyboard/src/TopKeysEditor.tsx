@@ -203,7 +203,7 @@ export default function TopKeysEditor() {
                 onToggleStickyCtrl={() => {}}
                 onSendInput={() => {}}
                 onSendVoiceText={() => {}}
-                onUploadImage={() => {}}
+                onUploadImages={() => {}}
               />
             ))
           )}

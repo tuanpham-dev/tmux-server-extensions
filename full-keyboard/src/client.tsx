@@ -49,8 +49,36 @@ export function readSuppressMode(): SuppressMode {
   return "whenShown";
 }
 
-export function readStyle(): "fixed" | "floating" {
-  return extSettings?.get("fullKeyboard.style") === "floating" ? "floating" : "fixed";
+export function readStyle(): "fixed" | "floating" | "floating-docked" {
+  const v = extSettings?.get("fullKeyboard.style");
+  return v === "floating" || v === "floating-docked" ? v : "fixed";
+}
+
+// Shared open/closed state for the floating toggle. In "floating-docked" mode
+// the movable toggle (FloatingKeyboard, overlay slot) and the docked keyboard
+// it shows (FullKeyboard, bar slot) are separate accessory components, so this
+// module-level flag is their single source of truth. Device-local UI state,
+// not a persisted setting.
+let floatingOpen = false;
+const floatingOpenListeners = new Set<() => void>();
+export function getFloatingOpen(): boolean {
+  return floatingOpen;
+}
+export function setFloatingOpen(v: boolean): void {
+  if (floatingOpen === v) return;
+  floatingOpen = v;
+  for (const cb of floatingOpenListeners) cb();
+}
+export function useFloatingOpen(): boolean {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const cb = () => setTick((t) => t + 1);
+    floatingOpenListeners.add(cb);
+    return () => {
+      floatingOpenListeners.delete(cb);
+    };
+  }, []);
+  return floatingOpen;
 }
 
 // The top-bar layout persists as a JSON string setting (extension
@@ -108,6 +136,7 @@ interface TerminalAccessoryContext {
   sendInput(data: string): void;
   sendText(text: string): void;
   uploadImage(file: File): void;
+  uploadImages(files: File[]): void;
   setSoftKeyboardSuppressed(suppressed: boolean): void;
   containerRef: React.RefObject<HTMLDivElement | null>;
 }

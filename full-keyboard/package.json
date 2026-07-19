@@ -2,7 +2,7 @@
   "name": "full-keyboard",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "displayName": "Full Keyboard",
   "description": "A full on-screen QWERTY keyboard for mobile: number row, sticky Shift/Ctrl/Alt, two symbol pages, arrow/Backspace hold-to-repeat, and a customizable special-key top bar (Esc, Tab, arrows, voice, image). Fixed or floating; optionally hides the device's native keyboard while shown.",
   "icon": "./icon.svg",
@@ -20,9 +20,13 @@
         "fullKeyboard.style": {
           "type": "string",
           "default": "fixed",
-          "enum": ["fixed", "floating"],
-          "enumItemLabels": ["Fixed (docked below terminal)", "Floating (movable toggle)"],
-          "description": "Docked below the terminal (the terminal shrinks above it), or a movable toggle you tap to show the keyboard as an overlay that leaves the terminal full-size."
+          "enum": ["fixed", "floating", "floating-docked"],
+          "enumItemLabels": [
+            "Fixed (docked below terminal)",
+            "Floating (movable toggle, overlay keyboard)",
+            "Floating toggle, docked keyboard"
+          ],
+          "description": "Fixed docks the keyboard below the terminal (the terminal shrinks above it). Floating gives a movable toggle you tap to show the keyboard as an overlay that leaves the terminal full-size. \"Floating toggle, docked keyboard\" keeps the movable toggle but has it show/hide the docked (fixed-position) keyboard instead of a floating overlay."
         },
         "fullKeyboard.suppressSoftKeyboard": {
           "type": "string",

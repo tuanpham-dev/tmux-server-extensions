@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TerminalAccessoryContext } from "./client";
-import { readStyle, readSuppressMode } from "./client";
+import { readStyle, readSuppressMode, useFloatingOpen } from "./client";
 import KeyboardSurface from "./KeyboardSurface";
 
 interface Props {
@@ -16,7 +16,12 @@ interface Props {
 // while the FloatingKeyboard overlay accessory takes over.
 export default function FullKeyboard({ context, visible }: Props) {
   const style = readStyle();
-  const active = style === "fixed" && visible;
+  // Docked in fixed mode (always), and in "floating-docked" mode while the
+  // floating toggle is open — where FloatingKeyboard renders only the movable
+  // toggle and drives OS-keyboard suppression; this bar accessory just renders
+  // the docked surface. See the suppression effect below.
+  const floatingOpen = useFloatingOpen();
+  const active = visible && (style === "fixed" || (style === "floating-docked" && floatingOpen));
 
   // context is a fresh object every TerminalView render; ref it so the
   // suppression effect depends only on the booleans, not on identity.

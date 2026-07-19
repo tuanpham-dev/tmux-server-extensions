@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { TerminalAccessoryContext } from "./client";
-import { readStyle, readSuppressMode } from "./client";
+import { getFloatingOpen, readStyle, readSuppressMode, setFloatingOpen, useFloatingOpen } from "./client";
 import KeyboardSurface from "./KeyboardSurface";
 
 interface Props {
@@ -49,10 +49,13 @@ function clamp(v: number, min: number, max: number): number {
 // fixed mode, where FullKeyboard's bar accessory takes over.
 export default function FloatingKeyboard({ context, visible }: Props) {
   const style = readStyle();
-  const active = style === "floating" && visible;
+  const active = (style === "floating" || style === "floating-docked") && visible;
+  // In "floating-docked" the toggle shows/hides the docked keyboard (rendered
+  // by FullKeyboard in the bar slot) rather than the overlay panel below.
+  const docked = style === "floating-docked";
 
   const [pos, setPos] = useState<FabPos>(loadPos);
-  const [expanded, setExpanded] = useState(false);
+  const expanded = useFloatingOpen();
   const dragState = useRef<{ startX: number; startY: number; moved: boolean } | null>(null);
   // Bumped by the ResizeObserver so a container resize (rotation, sidebar
   // toggle) re-derives the toggle's pixel position from the live rect.
@@ -78,9 +81,10 @@ export default function FloatingKeyboard({ context, visible }: Props) {
   const suppressMode = readSuppressMode();
   const suppress = active && suppressMode !== "never" && (suppressMode === "always" || expanded);
   useEffect(() => {
-    // Only floating mode drives suppression from here; in fixed mode this is
+    // The floating toggle drives suppression for both its modes (overlay and
+    // docked) since it's the always-present component; in fixed mode this is
     // inert and the cleanup (on the style flip) releases it.
-    if (style !== "floating") return;
+    if (style === "fixed") return;
     contextRef.current.setSoftKeyboardSuppressed(suppress);
     return () => contextRef.current.setSoftKeyboardSuppressed(false);
   }, [style, suppress]);
@@ -124,8 +128,8 @@ export default function FloatingKeyboard({ context, visible }: Props) {
         return p;
       });
     } else {
-      // A still tap toggles the keyboard.
-      setExpanded((v) => !v);
+      // A still tap toggles the keyboard (getter avoids a stale closure value).
+      setFloatingOpen(!getFloatingOpen());
     }
   };
 
@@ -144,7 +148,7 @@ export default function FloatingKeyboard({ context, visible }: Props) {
 
   return (
     <>
-      {expanded && (
+      {expanded && !docked && (
         <div className="fk-floating-panel" style={panelStyle}>
           <KeyboardSurface context={context} />
         </div>
