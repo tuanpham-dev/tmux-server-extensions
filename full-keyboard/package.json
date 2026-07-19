@@ -2,7 +2,7 @@
   "name": "full-keyboard",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Full Keyboard",
   "description": "A full on-screen QWERTY keyboard for mobile: number row, sticky Shift/Ctrl/Alt, two symbol pages, arrow/Backspace hold-to-repeat, and a customizable special-key top bar (Esc, Tab, arrows, voice, image). Fixed or floating; optionally hides the device's native keyboard while shown.",
   "icon": "./icon.svg",

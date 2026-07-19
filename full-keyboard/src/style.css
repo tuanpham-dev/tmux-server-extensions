@@ -94,7 +94,7 @@
      space); min-width: 0 lets keys shrink to share a narrow phone row. */
   flex: 1 1 0;
   min-width: 0;
-  min-height: 38px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: center;
