@@ -8,7 +8,7 @@ import {
   parseHexColor,
   type RendererShim,
 } from "./shims";
-import { cellFromPoint, markSyntheticSelectStart } from "@tmux-server/engine-support";
+import { cellFromPoint, joinedSelectionText, markSyntheticSelectStart } from "@tmux-server/engine-support";
 import { buildLinkProvider, stitchLine } from "./links";
 import type {
   CellPosition,
@@ -44,6 +44,9 @@ export async function createGhosttyEngine(options: TerminalEngineOptions): Promi
   } = options;
 
   let disposed = false;
+  // Live settings copy for the ones consulted at event time rather than
+  // applied to term.options (copyJoinWrappedLines) — updated in setSettings.
+  let currentSettings = initialSettings;
 
   const term = new Terminal({
     cursorBlink: initialSettings.cursorBlink,
@@ -333,7 +336,24 @@ export async function createGhosttyEngine(options: TerminalEngineOptions): Promi
       if (suppressed) term.textarea.setAttribute("inputmode", "none");
       else term.textarea.removeAttribute("inputmode");
     },
-    getSelection: () => term.getSelection(),
+    // Selection text with soft-wrap joining (host helper; see the shim's
+    // guard note — older hosts don't export it, fall back to raw). ghostty-
+    // web 0.4's getSelectionPosition() is 0-based buffer-absolute with an
+    // INCLUSIVE end column (SelectionManager stores end as startCol +
+    // length - 1), so +1 converts to the helper's exclusive endX.
+    getSelection: () => {
+      if (!currentSettings.copyJoinWrappedLines || typeof joinedSelectionText !== "function") {
+        return term.getSelection();
+      }
+      const pos = term.getSelectionPosition();
+      if (!pos) return term.getSelection();
+      return joinedSelectionText(term, {
+        startX: pos.start.x,
+        startY: pos.start.y,
+        endX: pos.end.x + 1,
+        endY: pos.end.y,
+      });
+    },
     clearSelection: () => term.clearSelection(),
     clear: () => term.clear(),
     // The one synthetic event left (down from the xterm era's
@@ -430,6 +450,7 @@ export async function createGhosttyEngine(options: TerminalEngineOptions): Promi
         minimumContrastRatio: s.minimumContrastRatio,
         textThickness: s.textThickness,
       });
+      currentSettings = s;
       // Same rationale as the construction-time bounce: handleFontChange
       // is the one public path that re-sizes AND force-renders with the
       // shimmed metrics — a shim-only change (e.g. contrast ratio) must

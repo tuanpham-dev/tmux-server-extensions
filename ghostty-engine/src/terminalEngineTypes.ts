@@ -46,6 +46,9 @@ export interface TerminalEngineSettings {
   letterSpacing: number;
   minimumContrastRatio: number;
   textThickness: number;
+  // Join soft-wrapped rows when extracting selection text for copy — see
+  // the host's client/src/selectionText.ts (via @tmux-server/engine-support).
+  copyJoinWrappedLines: boolean;
 }
 
 // 1-based cell-grid coordinates — matches the SGR mouse-report wire format

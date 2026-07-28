@@ -15,5 +15,8 @@ export const {
   ensureContrastRatio,
   whenMatches,
   sendWithInkSafeEnters,
+  // Absent on hosts older than the copy-join feature — callers must guard
+  // (typeof … === "function") before using it.
+  joinedSelectionText,
 } = ES;
 export default ES;
