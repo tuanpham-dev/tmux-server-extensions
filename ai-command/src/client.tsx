@@ -17,6 +17,7 @@ interface ActiveContext {
 }
 
 let serverFetch: ((path: string, init?: RequestInit) => Promise<Response>) | null = null;
+let focusActiveTerminal: (() => void) | null = null;
 let removeStylesheet: (() => void) | null = null;
 let removeContextListener: (() => void) | null = null;
 
@@ -130,6 +131,11 @@ function openGenerateDialog(initialQuery = ""): void {
   const close = () => {
     root.unmount();
     host.remove();
+    // The dialog's autofocused input held keyboard focus — hand it back to
+    // the terminal so a just-typed command can be reviewed and run with
+    // Enter immediately (also after Escape/backdrop close, matching how
+    // closing the quick switcher lands back at the prompt).
+    focusActiveTerminal?.();
   };
   root.render(<GenerateDialog initialQuery={initialQuery} close={close} />);
 }
@@ -151,6 +157,8 @@ interface ExtensionContext {
   app: {
     getActiveContext(): ActiveContext;
     onDidChangeContext(cb: (ctx: ActiveContext) => void): () => void;
+    // Typed optional: absent on hosts older than the focus-handback API.
+    focusActiveTerminal?(): void;
   };
   serverFetch(path: string, init?: RequestInit): Promise<Response>;
   assetUrl(relPath: string): string;
@@ -158,6 +166,7 @@ interface ExtensionContext {
 
 export function activate(ctx: ExtensionContext): void {
   serverFetch = ctx.serverFetch;
+  focusActiveTerminal = ctx.app.focusActiveTerminal?.bind(ctx.app) ?? null;
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
 
   ctx.registerCommand({
@@ -197,5 +206,6 @@ export function deactivate(): void {
   removeContextListener?.();
   removeContextListener = null;
   serverFetch = null;
+  focusActiveTerminal = null;
   activeContext = NO_CONTEXT;
 }
