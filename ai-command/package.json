@@ -1,0 +1,47 @@
+{
+  "name": "ai-command",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.1.0",
+  "displayName": "AI Command Search",
+  "description": "Natural language to shell command via a locally installed AI CLI (Claude Code, OpenAI Codex, Google Gemini, or a custom command): \"AI: Generate Command\" in the palette (or a \"??\" quick-switcher query) types the generated command at the prompt for review — never runs it.",
+  "icon": "./icon.svg",
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "AI Command Search",
+      "properties": {
+        "aiCommand.provider": {
+          "type": "string",
+          "default": "claude",
+          "enum": ["claude", "codex", "gemini", "custom"],
+          "enumItemLabels": [
+            "Claude Code (claude CLI)",
+            "OpenAI Codex (codex CLI)",
+            "Google Gemini (gemini CLI)",
+            "Custom command"
+          ],
+          "description": "Which locally installed AI CLI generates commands."
+        },
+        "aiCommand.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override the selected provider's binary (name on PATH, or an absolute path). Empty uses the provider's default (claude / codex / gemini). Ignored for the custom provider."
+        },
+        "aiCommand.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model passed to the provider CLI (--model for claude, -m for codex/gemini). Empty uses the CLI's default; a small model responds fastest. Ignored for the custom provider."
+        },
+        "aiCommand.customCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Custom provider only: a shell command line that receives the prompt as its single trailing argument and prints exactly one shell command, e.g. `my-llm --quiet`."
+        }
+      }
+    }
+  }
+}
