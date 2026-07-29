@@ -60,6 +60,11 @@ export default function SwipeBar({ visible, bottomOffset, onSwipe }: Props) {
   return (
     <div
       className="one-hand-swipe-bar"
+      // A swipe here is a free horizontal drag the host's flick-to-toggle-
+      // sidebar gesture would otherwise also act on (the strip isn't a
+      // horizontal scroller, so its opt-out walk can't detect it) — a left/
+      // right swipe would run its command AND open/close the sidebar.
+      data-no-sidebar-swipe=""
       style={{ bottom: `${bottomOffset}px` }}
       onPointerDown={onPointerDown}
       onPointerUp={finish}
