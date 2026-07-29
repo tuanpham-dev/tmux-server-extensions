@@ -2,7 +2,7 @@
   "name": "one-hand",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "displayName": "One-Hand Operation",
   "description": "A transparent swipe bar across the bottom of the editor, on every tab, for driving the app one-handed on mobile: swipe left / right / up to run customizable commands (default: next tab, previous tab, open quick switcher).",
   "icon": "./icon.svg",
