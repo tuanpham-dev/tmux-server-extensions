@@ -55,6 +55,14 @@ function basenameOf(p: string): string {
   return p.slice(p.lastIndexOf("/") + 1);
 }
 
+// The draft tab's path for a given working directory. It encodes where the
+// prompt will be saved, which is what lets one draft per session coexist
+// (each gets its own tab) and what saveDraft reads back instead of trusting
+// whichever session happens to be focused at Save time.
+function draftPathFor(cwd: string): string {
+  return `${cwd}/${promptsDir()}/${DRAFT_BASENAME}`;
+}
+
 function dirnameOf(p: string): string {
   const slash = p.lastIndexOf("/");
   return slash <= 0 ? "/" : p.slice(0, slash);
@@ -321,23 +329,26 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
   // directory-creation and refresh behavior can't drift between them.
   const writeTo = async (target: string) => {
     const dir = dirnameOf(target);
-    const cwd = activeContext.cwd;
-    // mkdir -p under the session cwd when the target is inside it; a prompt
-    // opened from elsewhere in the tree already has its directory.
-    if (cwd && dir.startsWith(cwd + "/")) {
-      await makeDir(cwd, dir.slice(cwd.length + 1));
-    }
+    // mkdir -p the target's own directory (the host's mkdir route resolves
+    // <parent>/<name> and creates the whole chain), so a first save into a
+    // not-yet-existing prompts folder works. Derived from the path itself,
+    // never from the active session: a draft opened for another tab group
+    // must land in *that* group's directory, whichever session is focused
+    // when Save is pressed.
+    await makeDir(dirnameOf(dir), basenameOf(dir));
     await saveFileText(target, contentRef.current);
     refreshFiles?.();
   };
 
   const saveDraft = async () => {
-    const cwd = activeContext.cwd;
-    if (!cwd) {
+    // The draft's own path carries the directory it was opened for — see
+    // the New Prompt command and the tab-group menu item, which both build
+    // it from a specific session's cwd.
+    const dir = dirnameOf(filePath);
+    if (dir === "/" || !dir) {
       setError("No active session — open a terminal tab so the prompt has a directory to save into.");
       return;
     }
-    const dir = `${cwd}/${promptsDir()}`;
     const text = contentRef.current;
 
     // Ask the AI for a name; fall back to the prompt's own first words. Only
@@ -482,6 +493,16 @@ interface ExtensionContext {
     isVisible: (path: string, isDir: boolean) => boolean;
     onClick: (path: string) => void;
   }): void;
+  // Likewise optional: a tab group's chip menu. ctx is { sessionName, cwd },
+  // cwd being that session's active window's directory.
+  registerTabGroupMenuItem?(item: {
+    id: string;
+    label: string;
+    icon?: string;
+    order?: number;
+    isVisible: (ctx: { sessionName: string; cwd: string | null }) => boolean;
+    onClick: (ctx: { sessionName: string; cwd: string | null }) => void;
+  }): void;
   app: {
     getActiveContext(): ActiveContext;
     onDidChangeContext(cb: (ctx: ActiveContext) => void): () => void;
@@ -514,13 +535,12 @@ export function activate(ctx: ExtensionContext): void {
     label: "Prompts: New Prompt",
     run: () => {
       const cwd = activeContext.cwd;
-      if (!cwd) {
-        // Same surface as any other editor error, without a toast API: open
-        // the draft anyway so the message is visible in context.
-        openViewerTab?.("promptEditor", `/${DRAFT_BASENAME}`, { title: "New Prompt" });
-        return;
-      }
-      openViewerTab?.("promptEditor", `${cwd}/${promptsDir()}/${DRAFT_BASENAME}`, { title: "New Prompt" });
+      // With no active session there's nowhere to save: open the draft
+      // anyway, at a path whose missing directory makes the editor explain
+      // that in context — this extension has no toast API of its own.
+      openViewerTab?.("promptEditor", cwd ? draftPathFor(cwd) : `/${DRAFT_BASENAME}`, {
+        title: "New Prompt",
+      });
     },
   });
 
@@ -530,6 +550,19 @@ export function activate(ctx: ExtensionContext): void {
     icon: "edit",
     isVisible: (path, isDir) => !isDir && path.endsWith(PROMPT_SUFFIX),
     onClick: (path) => openViewerTab?.("promptEditor", path),
+  });
+
+  // Same action from a tab group's chip menu, but scoped to that group's own
+  // session rather than whichever one is focused — the draft path carries
+  // the directory, so saving lands in that session's tree.
+  ctx.registerTabGroupMenuItem?.({
+    id: "newPromptHere",
+    label: "New Prompt Here",
+    icon: "add",
+    isVisible: ({ cwd }) => Boolean(cwd),
+    onClick: ({ cwd }) => {
+      if (cwd) openViewerTab?.("promptEditor", draftPathFor(cwd), { title: "New Prompt" });
+    },
   });
 
   activeContext = ctx.app.getActiveContext();
