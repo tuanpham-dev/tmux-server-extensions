@@ -5,7 +5,7 @@ A dedicated editor tab for `.prompt.md` files, with AI refinement and AI-suggest
 ## Usage
 
 - **Command palette** (`Ctrl+Shift+P`) → "Prompts: New Prompt" opens an empty draft tab for the active session.
-- **Tab group menu** → right-click a session's group chip in the tab bar and choose **New Prompt Here** to start a draft for *that* session, whichever tab you currently have focused. Each session gets its own draft tab, and the draft remembers which directory it belongs to, so saving always lands in the right tree.
+- **Tab group dropdown** → click the arrow on a session's group chip in the tab bar (the menu listing its windows) and choose **New Prompt Here** to start a draft for *that* session, whichever tab you currently have focused. Each session gets its own draft tab, and the draft remembers which directory it belongs to, so saving always lands in the right tree.
 - Write the prompt, press **Refine** to have a local AI CLI tighten it up (your text is replaced; the tab is marked unsaved so nothing is written yet).
 - Press **Save**. On a new draft the AI proposes a kebab-case filename from the content and saves straight to `plans/prompts/<name>.prompt.md` under the active session's working directory. If that name is taken — or the AI call fails — a small dialog asks you to name it yourself.
 - **Reopen any prompt** by right-clicking it in the FILES tree and choosing **Edit Prompt**. A plain click still opens the file in nvim, and the markdown preview is still available from the hover icon.
