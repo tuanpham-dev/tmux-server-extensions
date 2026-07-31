@@ -4,7 +4,8 @@ A dedicated editor tab for `.prompt.md` files, with AI refinement and AI-suggest
 
 ## Usage
 
-- **Command palette** (`Ctrl+Shift+P`) → "Prompts: New Prompt" opens an empty draft tab.
+- **Command palette** (`Ctrl+Shift+P`) → "Prompts: New Prompt" opens an empty draft tab for the active session.
+- **Tab group menu** → right-click a session's group chip in the tab bar and choose **New Prompt Here** to start a draft for *that* session, whichever tab you currently have focused. Each session gets its own draft tab, and the draft remembers which directory it belongs to, so saving always lands in the right tree.
 - Write the prompt, press **Refine** to have a local AI CLI tighten it up (your text is replaced; the tab is marked unsaved so nothing is written yet).
 - Press **Save**. On a new draft the AI proposes a kebab-case filename from the content and saves straight to `plans/prompts/<name>.prompt.md` under the active session's working directory. If that name is taken — or the AI call fails — a small dialog asks you to name it yourself.
 - **Reopen any prompt** by right-clicking it in the FILES tree and choosing **Edit Prompt**. A plain click still opens the file in nvim, and the markdown preview is still available from the hover icon.
@@ -29,4 +30,6 @@ Nothing from the AI's reply is ever executed: the refined text lands in the edit
 
 ## Requirements
 
-The "Edit Prompt" context-menu item needs a tmux-server build with the `registerFileMenuItem` extension API. On older hosts everything else still works — reach prompts through the New Prompt command.
+Two entry points need recent tmux-server extension APIs: "Edit Prompt" (FILES-tree menu) needs `registerFileMenuItem`, and "New Prompt Here" (tab group menu) needs `registerTabGroupMenuItem`. Both are called optionally — on an older host those two entries simply don't appear, and everything else still works through the New Prompt command.
+
+The AI CLI runs as the **server** process, so it must be on that process's `PATH`. A server started from a login shell inherits your usual `PATH`; one started by systemd often doesn't, and a CLI installed under `~/.local/bin` can go missing. If Refine reports the CLI wasn't found, set `prompts.binaryPath` to its absolute path.
