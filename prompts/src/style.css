@@ -1,0 +1,214 @@
+/* ---- Prompt editor tab ---- */
+
+.prompts-editor {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.prompts-editor-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.prompts-editor-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.prompts-badge {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0 6px;
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+.prompts-badge.saved {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.prompts-textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  border: none;
+  outline: none;
+  padding: 12px 14px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.55;
+  tab-size: 2;
+}
+
+.prompts-textarea:disabled {
+  opacity: 0.6;
+}
+
+.prompts-error {
+  font-size: 12px;
+  color: var(--error);
+  white-space: pre-wrap;
+}
+
+.prompts-error-bar {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- Saved-state notice (the parked draft tab) ---- */
+
+.prompts-saved-notice {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+}
+
+.prompts-saved-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.prompts-saved-path {
+  font-size: 11px;
+  opacity: 0.7;
+  word-break: break-all;
+}
+
+.prompts-saved-hint {
+  margin: 4px 0 10px;
+  font-size: 12px;
+  opacity: 0.8;
+  max-width: 46ch;
+}
+
+/* ---- Save-as dialog ---- */
+
+.prompts-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.prompts-dialog {
+  width: min(460px, calc(100vw - 32px));
+  background: var(--panel-bg, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 12px 14px;
+}
+
+.prompts-dialog-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.prompts-field {
+  display: block;
+  font-size: 11px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+}
+
+.prompts-field > span {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.prompts-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prompts-input {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  background: var(--input-bg, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.prompts-input:focus {
+  outline: 1px solid var(--focus-border);
+  outline-offset: -1px;
+}
+
+.prompts-suffix {
+  flex: none;
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.prompts-dialog-path {
+  font-size: 11px;
+  opacity: 0.6;
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.prompts-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.prompts-button {
+  background: var(--button-secondary-bg, transparent);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.prompts-button:hover:not(:disabled) {
+  border-color: var(--focus-border);
+}
+
+.prompts-button.primary {
+  background: var(--button-bg, var(--accent));
+  color: var(--button-fg, #fff);
+  border-color: transparent;
+}
+
+.prompts-button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

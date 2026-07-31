@@ -1,0 +1,57 @@
+{
+  "name": "prompts",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Prompts",
+  "description": "A prompt editor tab for .prompt.md files: \"Prompts: New Prompt\" opens a draft, Refine rewrites it with a locally installed AI CLI (Claude Code, OpenAI Codex, Google Gemini, or a custom command), and the first save names the file from its content. Existing prompts open via the FILES-tree \"Edit Prompt\" menu item.",
+  "icon": "./icon.svg",
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Prompts",
+      "properties": {
+        "prompts.provider": {
+          "type": "string",
+          "default": "claude",
+          "enum": ["claude", "codex", "gemini", "custom"],
+          "enumItemLabels": [
+            "Claude Code (claude CLI)",
+            "OpenAI Codex (codex CLI)",
+            "Google Gemini (gemini CLI)",
+            "Custom command"
+          ],
+          "description": "Which locally installed AI CLI refines prompts and suggests filenames."
+        },
+        "prompts.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override the selected provider's binary (name on PATH, or an absolute path). Empty uses the provider's default (claude / codex / gemini). Ignored for the custom provider."
+        },
+        "prompts.model": {
+          "type": "string",
+          "default": "",
+          "description": "Model passed to the provider CLI (--model for claude, -m for codex/gemini). Empty uses the CLI's default. Ignored for the custom provider."
+        },
+        "prompts.customCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Custom provider only: a shell command line that receives the instruction plus prompt as its single trailing argument and prints the result, e.g. `my-llm --quiet`."
+        },
+        "prompts.refineInstruction": {
+          "type": "string",
+          "default": "Rewrite the following prompt so it is clearer, more specific, and better structured for an AI coding agent. Keep the author's intent and every concrete detail; do not invent requirements. Reply with ONLY the rewritten prompt - no preamble, no commentary, no code fences.",
+          "description": "The instruction sent to the AI CLI when you press Refine in the prompt editor."
+        },
+        "prompts.directory": {
+          "type": "string",
+          "default": "plans/prompts",
+          "description": "Where new prompts are saved, relative to the active session's working directory."
+        }
+      }
+    }
+  }
+}
