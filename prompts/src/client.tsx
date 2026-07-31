@@ -15,6 +15,7 @@ import type { ComponentType } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import "./style.css";
+import Icon from "./Icon";
 import { injectStylesheet } from "./injectStylesheet";
 import { fetchFileText, fileExists, makeDir, NotFoundError, saveFileText } from "./fileApi";
 
@@ -407,27 +408,31 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
     setDirtyState(false);
   };
 
+  // Icon-only, matching the host's own tab-bar controls (same .icon-button
+  // class and codicon glyphs the bundled csv/json viewers use). The title is
+  // the only affordance naming the action, so it carries the in-flight state
+  // too — the spinning glyph says "busy", the tooltip says what's busy.
   const toolbar = (
     <>
       <button
         className="icon-button"
-        title="Refine this prompt with AI"
+        title={busy === "refine" ? "Refining with AI…" : "Refine this prompt with AI"}
         disabled={busy !== null || !content.trim() || saved !== null}
         onClick={() => void refine()}
       >
-        {busy === "refine" ? "Refining…" : "Refine"}
+        <Icon name={busy === "refine" ? "loading" : "sparkle"} className={busy === "refine" ? "codicon-modifier-spin" : undefined} />
       </button>
       <button
         className="icon-button"
-        title="Save"
+        title={busy === "save" ? "Saving…" : draft ? "Save (names the file from its content)" : "Save"}
         disabled={busy !== null || !content.trim() || saved !== null || (!dirty && !draft)}
         onClick={() => void save()}
       >
-        {busy === "save" ? "Saving…" : "Save"}
+        <Icon name={busy === "save" ? "loading" : "save"} className={busy === "save" ? "codicon-modifier-spin" : undefined} />
       </button>
       {!draft && (
         <button className="icon-button" title="Open in Editor" onClick={() => openInEditor?.(filePath)}>
-          Open in Editor
+          <Icon name="file-code" />
         </button>
       )}
     </>
