@@ -15,6 +15,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | One Dark Pro | color theme (5 variants) | [Binaryify/OneDark-Pro](https://github.com/Binaryify/OneDark-Pro) | MIT |
 | VSCode Icons | file icon theme | [vscode-icons/vscode-icons](https://github.com/vscode-icons/vscode-icons) | MIT |
 | Popular Monospace Fonts | terminal fonts (4 groups) | Fira Code, JetBrains Mono, Cascadia Code, Source Code Pro — via [Fontsource](https://fontsource.org/) | OFL-1.1 |
+| Symbols Nerd Font | icon glyphs (powerline, Font Awesome, Devicons, …) as a **secondary** font | [ryanoasis/nerd-fonts](https://github.com/ryanoasis/nerd-fonts) | MIT |
 
 Each extension's `LICENSE.txt` carries the full upstream license text and attribution.
 
@@ -27,6 +28,12 @@ A handful of keys VS Code sets via `registerColor()` defaults in its own source 
 ### Popular Monospace Fonts
 
 One extension, four selectable font groups (Fira Code, JetBrains Mono, Cascadia Code, Source Code Pro), each with core latin + latin-ext coverage across regular/500/bold weights plus italic where the upstream family ships one — sourced from the already-split, already-subsetted [`@fontsource`](https://fontsource.org/) npm packages rather than raw upstream releases, same approach as tmux-server's own bundled `ibm-plex-mono` extension.
+
+### Symbols Nerd Font
+
+A companion, not a replacement: the symbols-only Nerd Font face (10,413 icon glyphs, no letters or digits), meant for the **Secondary font** slot in Settings → Terminal so it backs whichever font you actually type in. tmux-server bundled this face until core commit `56e7c22` removed it from the default stack, which is where the tofu boxes in starship / powerlevel10k prompts and `eza` listings came from; installing this puts the glyphs back for any primary font, including core's own IBM Plex Mono.
+
+The woff2 is converted without subsetting from that exact removed file — see the extension's `README.md` for the regeneration command.
 
 ## Packing
 

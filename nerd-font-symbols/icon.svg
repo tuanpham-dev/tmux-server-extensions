@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <rect width="128" height="128" rx="28" fill="#B45309"/>
+  <!-- solid powerline separator (U+E0B0), the glyph this font is most reached for -->
+  <path d="M34 30 L74 64 L34 98 Z" fill="#ffffff"/>
+  <!-- its thin counterpart (U+E0B1), trailing behind -->
+  <path d="M84 34 L110 64 L84 94" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+</svg>
