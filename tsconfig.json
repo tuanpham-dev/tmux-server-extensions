@@ -1,0 +1,22 @@
+{
+  // Type-checking only — esbuild (scripts/build.mjs) does the actual
+  // compiling and strips types without checking them, so nothing here
+  // emits. Mirrors tmux-server's own client/tsconfig.json so extension
+  // sources moved between the two repos typecheck identically.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true
+  },
+  // Every code extension's src/, plus the ambient declarations they rely on:
+  // scripts/engine-support.d.ts types the "@tmux-server/engine-support" host
+  // shim, and types/ covers the CSS imports esbuild resolves but tsc can't.
+  "include": ["*/src/**/*", "scripts/engine-support.d.ts", "types/**/*"]
+}

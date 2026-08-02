@@ -5,11 +5,16 @@
   "description": "Optional tmux-server extensions, packaged as installable .tsix files.",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "pack": "npm run build && node scripts/pack.mjs"
+    "pack": "npm run build && node scripts/pack.mjs",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && node scripts/check.mjs"
   },
   "devDependencies": {
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "esbuild": "^0.23.0",
-    "ghostty-web": "0.4.0"
+    "ghostty-web": "0.4.0",
+    "typescript": "^5.9.3"
   },
   "allowScripts": {
     "esbuild@0.23.1": true

@@ -2,7 +2,7 @@
   "name": "ghostty-engine",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Ghostty Terminal Engine",
   "description": "The ghostty-web (WASM) terminal rendering engine. Install to add a 'Ghostty' option under Settings → Terminal; when it isn't installed the app uses the bundled, required xterm.js engine.",
   "icon": "./icon.svg",

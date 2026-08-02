@@ -1,0 +1,47 @@
+name: Check
+
+# Typecheck + manifest validation for work in progress. Deliberately separate
+# from pages.yml: that workflow deploys, and a pull request must never be able
+# to publish to the live registry. Pushes to main are covered by pages.yml
+# (which runs the same checks before packing), so they're excluded here.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 so the version-bump check can diff against the PR's
+      # base commit; a shallow clone has no base to compare with.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # build first: check.mjs's R7 accepts a missing dist/client.js only when
+      # a src/client.tsx exists to build it from, and building here also proves
+      # the esbuild bundle still compiles.
+      - run: npm run build
+      - run: npm run check
+
+      # An extension changed without a version bump republishes under its old
+      # version, and clients cache by version — so the update would silently
+      # never reach anyone. PRs only: a plain branch push has no base to diff.
+      - name: Require a version bump for changed extensions
+        if: github.event_name == 'pull_request'
+        run: node scripts/check.mjs --changed-since ${{ github.event.pull_request.base.sha }}

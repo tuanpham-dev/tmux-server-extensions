@@ -32,11 +32,23 @@ jobs:
           node-version: 22
           cache: npm
 
+      - run: npm ci
+
+      # Typecheck + manifest validation BEFORE packing: this catalog is the
+      # default registry for every tmux-server install, so a malformed
+      # manifest here reaches every user. Failing the job leaves the last
+      # good deployment serving instead.
+      - run: npm run build
+      - run: npm run check
+
       # pack runs `npm run build` first (esbuild-bundles code extensions),
       # then zips each extension into dist/<name>-<version>.tsix and writes
       # dist/index.json — the catalog tmux-server's registry loader fetches.
-      - run: npm ci
       - run: npm run pack
+
+      # ...and confirm what pack actually produced matches the manifests
+      # (every .tsix/README/icon the catalog references exists in dist/).
+      - run: node scripts/check.mjs --dist
 
       # enablement: true turns Pages on via the API if it isn't already,
       # so the first run doesn't require flipping Settings → Pages by hand.
