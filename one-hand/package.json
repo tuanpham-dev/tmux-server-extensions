@@ -2,9 +2,9 @@
   "name": "one-hand",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "displayName": "One-Hand Operation",
-  "description": "A transparent swipe bar across the bottom of the editor, on every tab, for driving the app one-handed on mobile: swipe left / right / up to run customizable commands (default: next tab, previous tab, open quick switcher).",
+  "description": "A transparent gesture bar across the bottom of the editor, on every tab, for driving the app one-handed on mobile: swipe left / right / up, double tap, or press and hold to run customizable commands (defaults: next tab, previous tab, open quick switcher; both tap gestures start unbound).",
   "icon": "./icon.svg",
   "contributes": {
     "configuration": {
@@ -15,12 +15,12 @@
           "default": "auto",
           "enum": ["auto", "always", "never"],
           "enumItemLabels": ["Auto (mobile devices only)", "Always show", "Never show"],
-          "description": "When the swipe bar is active at the bottom of the editor."
+          "description": "When the gesture bar is active at the bottom of the editor."
         },
         "oneHand.actions": {
           "type": "string",
           "default": "",
-          "description": "Which command each swipe direction runs, as JSON (edited with the picker below — empty means the defaults: swipe left = next tab, right = previous tab, up = quick switcher)."
+          "description": "Which command each gesture runs, as JSON (edited with the picker below — empty means the defaults: swipe left = next tab, right = previous tab, up = quick switcher, double tap and long press unbound)."
         }
       }
     }

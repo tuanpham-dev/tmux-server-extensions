@@ -1,30 +1,40 @@
-// The three supported swipe directions and their command mapping. Only
-// left/right/up are supported (a bottom strip has no meaningful "down"). Each
-// direction maps to a command id runnable via ctx.app.executeCommand; "" means
-// the direction is unbound.
+// The supported gestures and their command mapping. Three swipe directions
+// (a bottom strip has no meaningful "down") plus two stationary gestures the
+// strip is otherwise idle for. Each gesture maps to a command id runnable via
+// ctx.app.executeCommand; "" means the gesture is unbound.
 export type SwipeDirection = "left" | "right" | "up";
+export type OneHandGesture = SwipeDirection | "doubleTap" | "longPress";
+
+// Every gesture key, in settings-picker order. Iterated by readActions so a
+// new gesture only has to be added here and to DEFAULT_ACTIONS.
+export const GESTURES: OneHandGesture[] = ["left", "right", "up", "doubleTap", "longPress"];
 
 // Shipped defaults (carousel-style: swipe left advances to the next tab).
+// The two tap gestures ship UNBOUND — they arrived after the swipes, and
+// silently binding them would change behavior under existing users' thumbs.
 // Fully remappable in the settings picker.
-export const DEFAULT_ACTIONS: Record<SwipeDirection, string> = {
+export const DEFAULT_ACTIONS: Record<OneHandGesture, string> = {
   left: "tab.next",
   right: "tab.previous",
   up: "quickSwitcher.toggle",
+  doubleTap: "",
+  longPress: "",
 };
 
-// The direction map persists as a JSON string setting (extension configuration
+// The gesture map persists as a JSON string setting (extension configuration
 // is scalar-only). A malformed or partial stored value falls back per-key to
-// the defaults rather than dropping a direction — mirrors full-keyboard's
-// tolerant readTopKeys parse.
-export function readActions(raw: unknown): Record<SwipeDirection, string> {
-  const result: Record<SwipeDirection, string> = { ...DEFAULT_ACTIONS };
+// the defaults rather than dropping a gesture — mirrors full-keyboard's
+// tolerant readTopKeys parse, and is what lets a map stored before the tap
+// gestures existed keep working untouched.
+export function readActions(raw: unknown): Record<OneHandGesture, string> {
+  const result: Record<OneHandGesture, string> = { ...DEFAULT_ACTIONS };
   if (typeof raw !== "string" || !raw.trim()) return result;
   try {
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed === "object" && parsed !== null) {
-      for (const dir of ["left", "right", "up"] as const) {
-        const v = (parsed as Record<string, unknown>)[dir];
-        if (typeof v === "string") result[dir] = v;
+      for (const gesture of GESTURES) {
+        const v = (parsed as Record<string, unknown>)[gesture];
+        if (typeof v === "string") result[gesture] = v;
       }
     }
   } catch {

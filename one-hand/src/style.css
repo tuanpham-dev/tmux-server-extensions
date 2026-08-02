@@ -8,7 +8,10 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 24px;
+  /* A more generous thumb target than the original 24px — the visible grabber
+     stays pinned to the bottom (align-items: flex-end), this just enlarges the
+     reachable swipe zone above it. */
+  height: 40px;
   pointer-events: auto;
   touch-action: none;
   background: transparent;

@@ -9,7 +9,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | AI Command Search | natural language → shell command via a local AI CLI (Claude Code / Codex / Gemini / custom) | first-party (tmux-server) | MIT |
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
 | Full Keyboard | on-screen keyboard | first-party (tmux-server) | MIT |
-| One-Hand Operation | bottom swipe bar | first-party (tmux-server) | MIT |
+| One-Hand Operation | bottom gesture bar (swipe, double tap, long press) | first-party (tmux-server) | MIT |
 | Dark Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `dark_modern.json` include chain | MIT |
 | Light Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `light_modern.json` include chain | MIT |
 | One Dark Pro | color theme (5 variants) | [Binaryify/OneDark-Pro](https://github.com/Binaryify/OneDark-Pro) | MIT |

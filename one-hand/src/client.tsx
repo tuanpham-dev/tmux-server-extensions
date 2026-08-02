@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import "./style.css";
 import { injectStylesheet } from "./injectStylesheet";
-import { readActions, type SwipeDirection } from "./actions";
+import { readActions, type OneHandGesture } from "./actions";
 import SwipeBar from "./SwipeBar";
 import SwipeSettings from "./SwipeSettings";
 import { useBottomInset } from "./useBottomInset";
@@ -39,13 +39,13 @@ export function readShow(): "auto" | "always" | "never" {
   return v === "always" || v === "never" ? v : "auto";
 }
 
-// The direction→command map, resolved from the oneHand.actions JSON string
+// The gesture→command map, resolved from the oneHand.actions JSON string
 // setting (falls back per-key to the defaults — see actions.readActions).
-export function readActionsSetting(): Record<SwipeDirection, string> {
+export function readActionsSetting(): Record<OneHandGesture, string> {
   return readActions(extSettings?.get("oneHand.actions"));
 }
 
-export function writeActions(map: Record<SwipeDirection, string>): void {
+export function writeActions(map: Record<OneHandGesture, string>): void {
   extSettings?.set("oneHand.actions", JSON.stringify(map));
 }
 
@@ -93,11 +93,11 @@ function OneHandOverlay({ context }: { context: AppOverlayContext }) {
   // it sits above the keys, not over them (0 on non-terminal tabs).
   const bottomOffset = useBottomInset(context.containerRef);
   const actions = readActionsSetting();
-  const onSwipe = (dir: SwipeDirection) => {
-    const commandId = actions[dir];
+  const onGesture = (gesture: OneHandGesture) => {
+    const commandId = actions[gesture];
     if (commandId) runCommand(commandId);
   };
-  return <SwipeBar visible={isVisible(context)} bottomOffset={bottomOffset} onSwipe={onSwipe} />;
+  return <SwipeBar visible={isVisible(context)} bottomOffset={bottomOffset} onGesture={onGesture} />;
 }
 
 // ---- Activation ----
