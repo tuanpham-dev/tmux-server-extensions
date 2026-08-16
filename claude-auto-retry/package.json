@@ -1,0 +1,39 @@
+{
+  "name": "claude-auto-retry",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Claude Auto-Retry",
+  "description": "Auto-continue Claude Code sessions after a usage-limit reset: detects the \"limit reached\" banner in tmux panes running claude, then either sends \"continue\" automatically after the reset (plus a configurable offset) or asks you first — your choice, with an abort/confirm toast either way.",
+  "icon": "./icon.svg",
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Claude Auto-Retry",
+      "properties": {
+        "claudeAutoRetry.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "manual", "off"],
+          "enumItemLabels": ["Auto-continue after reset", "Ask me first", "Off"],
+          "description": "What to do when a Claude Code pane hits a usage limit. Off also stops the background pane polling entirely."
+        },
+        "claudeAutoRetry.offsetMinutes": {
+          "type": "integer",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 120,
+          "description": "Minutes to wait after the limit resets before sending the continue message."
+        },
+        "claudeAutoRetry.message": {
+          "type": "string",
+          "default": "continue",
+          "description": "Text sent to the Claude Code pane to resume the session."
+        }
+      }
+    }
+  }
+}

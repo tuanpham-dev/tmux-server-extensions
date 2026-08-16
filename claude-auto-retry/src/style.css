@@ -1,0 +1,67 @@
+.autoretry-toast-stack {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 900;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.autoretry-toast {
+  pointer-events: auto;
+  background: var(--panel-bg, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.autoretry-toast-message {
+  margin-bottom: 8px;
+}
+
+.autoretry-toast-title {
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+.autoretry-toast-title:hover {
+  color: var(--focus-border, var(--fg));
+}
+
+.autoretry-toast-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.autoretry-btn {
+  background: var(--input-bg, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.autoretry-btn:hover {
+  border-color: var(--focus-border, var(--border));
+}
+
+.autoretry-btn-primary {
+  background: var(--focus-border, var(--accent, #2563eb));
+  color: #ffffff;
+  border-color: transparent;
+}
+
+.autoretry-toast-sent {
+  opacity: 0.85;
+}

@@ -6,6 +6,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 
 | Extension | Type | Source | License |
 |---|---|---|---|
+| Claude Auto-Retry | detects a Claude Code usage-limit banner in tmux and auto-sends `continue` after the reset (or asks first) | first-party (tmux-server) | MIT |
 | AI Command Search | natural language → shell command via a local AI CLI (Claude Code / Codex / Gemini / custom) | first-party (tmux-server) | MIT |
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
 | Full Keyboard | on-screen keyboard | first-party (tmux-server) | MIT |
