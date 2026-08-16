@@ -38,6 +38,7 @@ interface SettingsApi {
 
 let serverFetch: ((path: string, init?: RequestInit) => Promise<Response>) | null = null;
 let openViewerTab: ((viewerId: string, path: string, opts?: { title?: string }) => void) | null = null;
+let closeViewerTab: ((viewerId: string, path: string) => void) | null = null;
 let refreshFiles: (() => void) | null = null;
 let extSettings: SettingsApi | null = null;
 let removeStylesheet: (() => void) | null = null;
@@ -239,14 +240,6 @@ interface FileViewerHostProps {
   fontSize?: number;
 }
 
-// Where a just-saved draft parks: the tab can't close itself (extensions have
-// no close-tab API), so it goes clean and read-only with a pointer to the
-// real file instead of silently keeping a duplicate of its content.
-interface SavedState {
-  path: string;
-  name: string;
-}
-
 function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty, fontSize }: FileViewerHostProps) {
   const draft = isDraftPath(filePath);
   const [content, setContent] = useState("");
@@ -254,7 +247,6 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
   const [dirty, setDirtyState] = useState(false);
   const [busy, setBusy] = useState<null | "refine" | "save">(null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<SavedState | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   // Read inside async flows that must not act on a stale render's value.
   const contentRef = useRef(content);
@@ -293,19 +285,18 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
 
   // Reload-on-focus: coming back to a clean tab picks up edits made in nvim
   // (or by an agent) since it was last read. Never while dirty — the user's
-  // unsaved text always wins — and never over a draft or a saved notice,
-  // which have no file behind them.
+  // unsaved text always wins — and never over a draft, which has no file
+  // behind it.
   const wasActive = useRef(active);
   useEffect(() => {
     const becameActive = active && !wasActive.current;
     wasActive.current = active;
-    if (becameActive && !dirtyRef.current && !draft && !saved) void load();
-  }, [active, draft, saved, load]);
+    if (becameActive && !dirtyRef.current && !draft) void load();
+  }, [active, draft, load]);
 
   const update = (text: string) => {
     setContent(text);
     setDirtyState(true);
-    setSaved(null);
     setSavedAt(null);
   };
 
@@ -318,7 +309,6 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
       const refined = await refinePrompt(text);
       setContent(refined);
       setDirtyState(true);
-      setSaved(null);
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -374,12 +364,10 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
 
     const target = `${dir}/${name}${PROMPT_SUFFIX}`;
     await writeTo(target);
-    // The draft tab stays open (no close-tab API) — park it on a notice
-    // naming the file, clean so closing it never prompts, and open the real
-    // file in its own tab.
-    setDirtyState(false);
-    setSaved({ path: target, name: `${name}${PROMPT_SUFFIX}` });
+    // Open the saved file in its own tab, then close this draft tab — no
+    // dirty-changes confirm needed, since the content just landed on disk.
     openViewerTab?.("promptEditor", target);
+    closeViewerTab?.("promptEditor", filePath);
   };
 
   const save = async () => {
@@ -401,13 +389,6 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
     }
   };
 
-  const dismissSaved = () => {
-    setSaved(null);
-    setSavedAt(null);
-    setContent("");
-    setDirtyState(false);
-  };
-
   // Icon-only, matching the host's own tab-bar controls (same .icon-button
   // class and codicon glyphs the bundled csv/json viewers use). The title is
   // the only affordance naming the action, so it carries the in-flight state
@@ -417,7 +398,7 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
       <button
         className="icon-button"
         title={busy === "refine" ? "Refining with AI…" : "Refine this prompt with AI"}
-        disabled={busy !== null || !content.trim() || saved !== null}
+        disabled={busy !== null || !content.trim()}
         onClick={() => void refine()}
       >
         <Icon name={busy === "refine" ? "loading" : "sparkle"} className={busy === "refine" ? "codicon-modifier-spin" : undefined} />
@@ -425,7 +406,7 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
       <button
         className="icon-button"
         title={busy === "save" ? "Saving…" : draft ? "Save (names the file from its content)" : "Save"}
-        disabled={busy !== null || !content.trim() || saved !== null || (!dirty && !draft)}
+        disabled={busy !== null || !content.trim() || (!dirty && !draft)}
         onClick={() => void save()}
       >
         <Icon name={busy === "save" ? "loading" : "save"} className={busy === "save" ? "codicon-modifier-spin" : undefined} />
@@ -442,36 +423,21 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
     <div className="prompts-editor" style={fontSize ? { fontSize: `${fontSize}px` } : undefined}>
       {active && toolbarTarget && createPortal(toolbar, toolbarTarget)}
       <div className="prompts-editor-header">
-        <span className="prompts-editor-path">
-          {saved ? "Prompt saved" : draft ? "New prompt (unsaved)" : filePath}
-        </span>
+        <span className="prompts-editor-path">{draft ? "New prompt (unsaved)" : filePath}</span>
         {dirty && <span className="prompts-badge">unsaved</span>}
         {savedAt && !dirty && <span className="prompts-badge saved">saved {savedAt}</span>}
       </div>
       {error && <div className="prompts-error prompts-error-bar">{error}</div>}
-      {saved ? (
-        <div className="prompts-saved-notice">
-          <div className="prompts-saved-title">Saved as {saved.name}</div>
-          <div className="prompts-saved-path">{saved.path}</div>
-          <p className="prompts-saved-hint">
-            It's open in its own tab now. This draft tab can be closed, or reused for another prompt.
-          </p>
-          <button className="prompts-button primary" onClick={dismissSaved}>
-            Write another prompt
-          </button>
-        </div>
-      ) : (
-        <textarea
-          className="prompts-textarea"
-          value={content}
-          disabled={loading || busy === "refine"}
-          spellCheck={false}
-          placeholder={
-            loading ? "Loading…" : "Write your prompt here, then press Refine to have the AI tighten it up."
-          }
-          onChange={(e) => update(e.target.value)}
-        />
-      )}
+      <textarea
+        className="prompts-textarea"
+        value={content}
+        disabled={loading || busy === "refine"}
+        spellCheck={false}
+        placeholder={
+          loading ? "Loading…" : "Write your prompt here, then press Refine to have the AI tighten it up."
+        }
+        onChange={(e) => update(e.target.value)}
+      />
     </div>
   );
 }
@@ -512,6 +478,7 @@ interface ExtensionContext {
     getActiveContext(): ActiveContext;
     onDidChangeContext(cb: (ctx: ActiveContext) => void): () => void;
     openViewerTab(viewerId: string, path: string, opts?: { title?: string }): void;
+    closeViewerTab(viewerId: string, path: string): void;
     refreshFiles(): void;
   };
   serverFetch(path: string, init?: RequestInit): Promise<Response>;
@@ -522,6 +489,7 @@ interface ExtensionContext {
 export function activate(ctx: ExtensionContext): void {
   serverFetch = ctx.serverFetch;
   openViewerTab = ctx.app.openViewerTab.bind(ctx.app);
+  closeViewerTab = ctx.app.closeViewerTab.bind(ctx.app);
   refreshFiles = ctx.app.refreshFiles.bind(ctx.app);
   extSettings = ctx.settings;
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
@@ -583,6 +551,7 @@ export function deactivate(): void {
   removeContextListener = null;
   serverFetch = null;
   openViewerTab = null;
+  closeViewerTab = null;
   refreshFiles = null;
   extSettings = null;
   activeContext = NO_CONTEXT;

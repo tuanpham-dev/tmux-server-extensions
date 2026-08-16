@@ -73,37 +73,6 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* ---- Saved-state notice (the parked draft tab) ---- */
-
-.prompts-saved-notice {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 24px;
-  text-align: center;
-}
-
-.prompts-saved-title {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.prompts-saved-path {
-  font-size: 11px;
-  opacity: 0.7;
-  word-break: break-all;
-}
-
-.prompts-saved-hint {
-  margin: 4px 0 10px;
-  font-size: 12px;
-  opacity: 0.8;
-  max-width: 46ch;
-}
-
 /* ---- Save-as dialog ---- */
 
 .prompts-backdrop {
