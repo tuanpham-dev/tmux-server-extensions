@@ -11,6 +11,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
 | Full Keyboard | on-screen keyboard | first-party (tmux-server) | MIT |
 | One-Hand Operation | bottom gesture bar (swipe, double tap, long press) | first-party (tmux-server) | MIT |
+| GUI Apps | run Linux GUI apps on the server, viewed/controlled in the browser via xpra (adaptive HTML5 remote display) | first-party (tmux-server) | MIT |
 | Dark Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `dark_modern.json` include chain | MIT |
 | Light Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `light_modern.json` include chain | MIT |
 | One Dark Pro | color theme (5 variants) | [Binaryify/OneDark-Pro](https://github.com/Binaryify/OneDark-Pro) | MIT |

@@ -1,0 +1,65 @@
+{
+  "name": "gui",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "GUI Apps",
+  "description": "Run Linux GUI apps on the server and view/control them in the browser through xpra — adaptive, low-latency HTML5 remote display (much faster than X11 forwarding or VNC). Requires xpra installed on the host; see this extension's README.",
+  "icon": "./icon.svg",
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "GUI Apps",
+      "properties": {
+        "gui.display": {
+          "type": "string",
+          "default": ":100",
+          "description": "X11 display number xpra creates (e.g. \":100\"). Only change this if it conflicts with another display already in use on the host."
+        },
+        "gui.port": {
+          "type": "integer",
+          "default": 14500,
+          "minimum": 1024,
+          "maximum": 65535,
+          "description": "Preferred TCP port for xpra's HTML5/WebSocket server. If already in use, the next free port is picked automatically."
+        },
+        "gui.quality": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "high", "low"],
+          "enumItemLabels": ["Automatic (adaptive)", "High quality", "Low latency"],
+          "description": "Encoding quality/latency tradeoff passed to xpra. Automatic adapts to network conditions on its own."
+        },
+        "gui.dpi": {
+          "type": "integer",
+          "default": 96,
+          "minimum": 48,
+          "maximum": 240,
+          "description": "DPI reported to X11 apps running on the display."
+        },
+        "gui.mode": {
+          "type": "string",
+          "default": "seamless",
+          "enum": ["seamless", "desktop"],
+          "enumItemLabels": ["Individual apps", "Full desktop"],
+          "description": "Individual apps: each launched app is its own window, composited by xpra directly. Full desktop: streams one whole desktop environment (its own window manager, taskbar, wallpaper) — needed for xfce4 or similar; don't launch a full desktop environment in Individual apps mode, its window manager will fight xpra's own. Takes effect on the next Start (stop first to switch an already-running session)."
+        },
+        "gui.desktopCommand": {
+          "type": "string",
+          "default": "xfce4-session",
+          "description": "Full desktop mode only: the command that starts the desktop environment (e.g. xfce4-session, startlxde, mate-session). Must be installed on the host."
+        },
+        "gui.resizeDisplay": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "fixed"],
+          "enumItemLabels": ["Follow browser window", "Fixed size"],
+          "description": "Follow browser window: the remote display resizes to fill your browser tab/window, including when using xpra's own Fullscreen toggle — but xpra recalculates DPI on every resize, which can make the cursor and UI elements balloon in size at some window sizes. Fixed size: the display stays at its initial resolution and DPI never changes (the image scales to fit your window instead of resizing natively) — use this if you hit the oversized-cursor issue. Takes effect on the next Start."
+        }
+      }
+    }
+  }
+}
