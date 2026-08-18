@@ -1,0 +1,35 @@
+{
+  "name": "github",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "GitHub",
+  "description": "A GITHUB sidebar tab listing the active repo's open pull requests and issues, with a \"Start work\" action that creates a worktree session for one — optionally priming an agent on it. Backed by the `gh` CLI; no credentials of its own.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "GitHub",
+      "properties": {
+        "github.worktreeLocation": {
+          "type": "string",
+          "default": "{repo}/.worktrees/{branch}",
+          "description": "Where a \"Start work\" worktree is created. {repo} is the repository root, {branch} the branch name (path separators in it replaced with '-'). Same convention as the bundled Worktrees extension."
+        },
+        "github.agents": {
+          "type": "string",
+          "default": "[{\"name\":\"Claude Code\",\"command\":\"claude\"},{\"name\":\"Claude Code (skip permissions)\",\"command\":\"claude --dangerously-skip-permissions\"}]",
+          "description": "Agent presets offered by \"Start work\", as a JSON array of {name, command}. Leave as [] to skip starting an agent — just the worktree session."
+        },
+        "github.sendAutoSubmit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Submit the issue/PR context to the agent immediately after \"Start work\". Off (default) types it into the pane for you to review before pressing Enter — the agent's own launch command is always submitted either way."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

@@ -1,0 +1,39 @@
+.text-editor-host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.text-editor-host.hidden {
+  display: none;
+}
+
+.text-editor-status {
+  padding: 8px 12px;
+  color: var(--fg-inactive, #999);
+  font-size: 12px;
+}
+
+.text-editor-error {
+  color: var(--error, #f48771);
+}
+
+.text-editor-cm {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.text-editor-cm .cm-editor {
+  height: 100%;
+}
+
+.text-editor-dirty-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-accent, #4fa8ff);
+  margin-right: 6px;
+}

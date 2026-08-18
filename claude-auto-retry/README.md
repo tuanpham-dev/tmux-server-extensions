@@ -1,6 +1,19 @@
-# Claude Auto-Retry
+# Claude Usage & Auto-Retry
 
-Detects a "usage limit reached" banner in any tmux pane running `claude`, then either sends `continue` automatically once the limit resets — with an on-screen Abort — or asks you first. No CLI changes required; it watches the pane the same way you would.
+Detects a "usage limit reached" banner in any tmux pane running `claude`, then either sends `continue` automatically once the limit resets — with an on-screen Abort — or asks you first. No CLI changes required; it watches the pane the same way you would. Also adds a **CLAUDE USAGE** panel (Run tab) showing token burn for the current 5-hour block and recent previous ones.
+
+## Claude Usage panel
+
+Scans every Claude Code transcript under `~/.claude/projects/` — including subagent
+sidecars, whose token usage never appears in their parent session's own entries
+(verified against real transcripts: a subagent's work is additional usage, not
+already counted) — and aggregates them into ccusage-style floating 5-hour blocks.
+Shows the current block's total (with a per-model breakdown and a rough tokens/min
+burn rate) plus up to 5 previous blocks. When `~/.claude/rate-limit-state.json` (see
+below) has a real reset epoch, the current block's displayed end uses that instead of
+the block's own computed window, and a weekly-reset line appears too. Everything here
+is estimated from local files — Claude Code writes no official rate-limit data to
+disk — labeled as such in the panel.
 
 ## How it works
 

@@ -1,0 +1,108 @@
+.agent-monitor-empty,
+.agent-monitor-error {
+  padding: 8px 12px;
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 12px;
+}
+
+.agent-monitor-error {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.agent-monitor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.agent-monitor-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.agent-monitor-row:hover {
+  background: var(--vscode-list-hoverBackground, rgba(255, 255, 255, 0.04));
+}
+
+.agent-monitor-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vscode-descriptionForeground, #999);
+}
+
+.agent-monitor-row-working .agent-monitor-dot {
+  background: #3fb950;
+}
+
+.agent-monitor-row-waiting .agent-monitor-dot {
+  background: #d29922;
+}
+
+.agent-monitor-row-permission .agent-monitor-dot {
+  background: #f0883e;
+  box-shadow: 0 0 0 2px rgba(240, 136, 62, 0.25);
+}
+
+.agent-monitor-row-done .agent-monitor-dot {
+  background: var(--vscode-descriptionForeground, #999);
+}
+
+.agent-monitor-project {
+  font-weight: 600;
+  flex: none;
+}
+
+.agent-monitor-window {
+  color: var(--vscode-descriptionForeground, #999);
+  flex: none;
+}
+
+.agent-monitor-task {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--vscode-descriptionForeground, #999);
+}
+
+.agent-monitor-time {
+  flex: none;
+  color: var(--vscode-descriptionForeground, #999);
+  font-size: 11px;
+}
+
+.agent-monitor-hooks-settings {
+  padding: 4px 0;
+}
+
+.agent-monitor-hooks-description {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground, #999);
+  margin: 0 0 8px;
+}
+
+.agent-monitor-hooks-snippet {
+  background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.04));
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.agent-monitor-hooks-copy {
+  margin-top: 6px;
+}
+
+.agent-monitor-hooks-status {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #999);
+  margin-top: 6px;
+}

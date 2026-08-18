@@ -1,0 +1,41 @@
+{
+  "name": "text-editor",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Text Editor",
+  "description": "A CodeMirror-based editor tab with syntax highlighting and save-back to disk, for quick edits without a round-trip through nvim.",
+  "icon": "./icon.svg",
+  "dependencies": {
+    "@codemirror/lang-css": "^6.3.1",
+    "@codemirror/lang-html": "^6.4.9",
+    "@codemirror/lang-javascript": "^6.2.2",
+    "@codemirror/lang-json": "^6.0.1",
+    "@codemirror/lang-markdown": "^6.3.0",
+    "@codemirror/lang-python": "^6.1.6",
+    "@codemirror/language": "^6.10.8",
+    "@codemirror/state": "^6.5.0",
+    "@codemirror/view": "^6.35.0",
+    "codemirror": "^6.0.1"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "Text Editor",
+      "properties": {
+        "textEditor.extensions": {
+          "type": "string",
+          "default": "ts,tsx,js,jsx,mjs,cjs,css,py,go,rs,sh,txt,toml",
+          "description": "Comma-separated file extensions (no dot) this editor opens for. Excludes json/yml/yaml, md/markdown, html/htm, and csv/tsv by default since those already have a dedicated bundled preview — add one back here if you'd rather edit it as plain text. Reached via the hover Preview icon, the \"Preview\" context-menu item, or Shift+Enter — unless \"Open this editor on a plain FILES click\" is on."
+        },
+        "textEditor.openOnClick": {
+          "type": "boolean",
+          "default": false,
+          "description": "Open this editor directly on a plain FILES-tree click instead of nvim, for the configured extensions. Takes effect after a page reload."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js"
+  }
+}

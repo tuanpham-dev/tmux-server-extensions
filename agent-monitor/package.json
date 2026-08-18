@@ -1,0 +1,32 @@
+{
+  "name": "agent-monitor",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Agent Monitor",
+  "description": "AGENTS sidebar tab: every tmux pane running an AI coding agent, with a working/waiting state and a badge counting agents waiting on you. Zero-config detection from pane titles and Claude Code transcripts; an optional Claude Code hooks snippet upgrades permission-prompt detection.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "Agent Monitor",
+      "properties": {
+        "agentMonitor.programs": {
+          "type": "string",
+          "default": "claude",
+          "description": "Comma-separated foreground commands (tmux's pane_current_command) to treat as agents, e.g. \"claude,codex\"."
+        },
+        "agentMonitor.waitingThresholdSeconds": {
+          "type": "integer",
+          "default": 15,
+          "minimum": 3,
+          "maximum": 120,
+          "description": "How long an agent's transcript can go unwritten before it's shown as waiting instead of working (only used when the pane title doesn't already say)."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

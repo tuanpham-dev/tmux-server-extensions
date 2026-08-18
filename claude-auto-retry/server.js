@@ -4,9 +4,10 @@
 // waits for the user to confirm via the client's toast. State lives entirely
 // in memory (see plans/claude-auto-retry-auto-continue.md for the full design).
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { parseUsageLines, blocksFor } from "./usageModel.mjs";
 
 const TMUX_TIMEOUT = 5000;
 const POLL_INTERVAL_MS = 10_000;
@@ -17,6 +18,9 @@ const PRUNE_AFTER_MS = 10 * 60_000; // terminal events kept this long for toast 
 const RATE_LIMIT_STATE_PATH = path.join(homedir(), ".claude", "rate-limit-state.json");
 const FIVE_HOUR_HORIZON_MS = 5 * 60 * 60_000;
 const SEVEN_DAY_HORIZON_MS = 7 * 24 * 60 * 60_000;
+const CLAUDE_PROJECTS_DIR = path.join(homedir(), ".claude", "projects");
+const USAGE_LOOKBACK_MS = 24 * 60 * 60_000;
+const USAGE_CACHE_TTL_MS = 30_000;
 
 function tmux(args) {
   return new Promise((resolve, reject) => {
@@ -414,6 +418,80 @@ function eventToJSON(ev) {
   };
 }
 
+// ---- Usage aggregation (T16/T17) ----
+
+// Reads one transcript file's usage entries — best-effort: a vanished/
+// unreadable file just contributes nothing. Skipped entirely if its mtime
+// is older than USAGE_LOOKBACK_MS, since a file untouched in the last 24h
+// can't have any entries inside the current or immediately-previous 5-hour
+// block anyway.
+async function collectFileEntries(filePath, now, out) {
+  try {
+    const s = await stat(filePath);
+    if (now - s.mtimeMs > USAGE_LOOKBACK_MS) return;
+    out.push(...parseUsageLines(await readFile(filePath, "utf8")));
+  } catch {
+    // Vanished mid-scan, or unreadable — contributes nothing.
+  }
+}
+
+// Every project's own session transcripts, plus every session's subagent
+// sidecars — verified live (2026-08-18) against a real transcript with a
+// known subagent run: the subagent's own token usage appears nowhere in the
+// parent's entries, so skipping subagents/ would under-count actual usage,
+// not double-count it (see plans/orca-features-implementation.md's Open
+// Questions for the check). Layout: ~/.claude/projects/<project>/
+// <sessionId>.jsonl (parent) and ~/.claude/projects/<project>/<sessionId>/
+// subagents/agent-*.jsonl (sidecars) — the same layout subagent-viewer's
+// server hook (in the main tmux-server repo) already reads.
+async function collectUsageEntries() {
+  let projectDirs;
+  try {
+    projectDirs = await readdir(CLAUDE_PROJECTS_DIR, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const now = Date.now();
+  const entries = [];
+  for (const projEnt of projectDirs) {
+    if (!projEnt.isDirectory()) continue;
+    const projDir = path.join(CLAUDE_PROJECTS_DIR, projEnt.name);
+    let children;
+    try {
+      children = await readdir(projDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const child of children) {
+      if (child.isFile() && child.name.endsWith(".jsonl")) {
+        await collectFileEntries(path.join(projDir, child.name), now, entries);
+      } else if (child.isDirectory()) {
+        const subagentsDir = path.join(projDir, child.name, "subagents");
+        let subFiles;
+        try {
+          subFiles = await readdir(subagentsDir);
+        } catch {
+          continue;
+        }
+        for (const name of subFiles) {
+          if (name.endsWith(".jsonl")) await collectFileEntries(path.join(subagentsDir, name), now, entries);
+        }
+      }
+    }
+  }
+  return entries;
+}
+
+let usageCache = null; // { at, entries }
+
+async function getUsageEntriesCached() {
+  const now = Date.now();
+  if (usageCache && now - usageCache.at < USAGE_CACHE_TTL_MS) return usageCache.entries;
+  const entries = await collectUsageEntries();
+  usageCache = { at: now, entries };
+  return entries;
+}
+
 // ---- Server activation ----
 
 // activate() re-runs on a disable->enable cycle within the same server
@@ -436,6 +514,28 @@ export function activate({ router, getSettings, log }) {
       .sort((a, b) => b.detectedAt - a.detectedAt)
       .map(eventToJSON);
     res.json({ events: list });
+  });
+
+  // Current block + up to 5 previous, most-recent-first. When
+  // ~/.claude/rate-limit-state.json has a plausible future reset epoch (the
+  // same file this extension's own detection already reads), the current
+  // block's displayed end is overridden to it — real reset data beats the
+  // floating-window heuristic whenever it's available.
+  router.get("/usage", async (req, res) => {
+    try {
+      const entries = await getUsageEntriesCached();
+      const now = Date.now();
+      const blocks = blocksFor(entries, now)
+        .sort((a, b) => b.start - a.start)
+        .slice(0, 6);
+      const resetsAt5h = await readRateLimitState("5h");
+      const resetsAtWeekly = await readRateLimitState("weekly");
+      const current = blocks.find((b) => b.isCurrent);
+      if (current && typeof resetsAt5h === "number" && resetsAt5h > now) current.end = resetsAt5h;
+      res.json({ blocks, resetsAt5h, resetsAtWeekly });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   router.post("/confirm", (req, res) => {

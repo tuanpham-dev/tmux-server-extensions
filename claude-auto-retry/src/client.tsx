@@ -156,6 +156,134 @@ function Toast({ ev, now, onAction }: { ev: LimitEvent; now: number; onAction: (
   );
 }
 
+// ---- Usage panel (T17) ----
+
+interface ModelTotals {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheCreation: number;
+}
+
+interface UsageBlock {
+  start: number;
+  end: number;
+  isCurrent: boolean;
+  perModel: Record<string, ModelTotals>;
+  total: ModelTotals;
+  firstAt: number;
+  lastAt: number;
+}
+
+interface UsageResponse {
+  blocks: UsageBlock[];
+  resetsAt5h: number | null;
+  resetsAtWeekly: number | null;
+}
+
+const USAGE_POLL_MS = 30_000;
+
+async function fetchUsage(): Promise<UsageResponse | null> {
+  if (!serverFetch) return null;
+  try {
+    const res = await serverFetch("/usage");
+    if (!res.ok) return null;
+    return (await res.json()) as UsageResponse;
+  } catch {
+    return null;
+  }
+}
+
+function formatCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
+function blockTotalTokens(b: UsageBlock): number {
+  return b.total.input + b.total.output + b.total.cacheRead + b.total.cacheCreation;
+}
+
+function formatTimeRange(b: UsageBlock): string {
+  const opts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+  return `${new Date(b.start).toLocaleTimeString([], opts)}–${new Date(b.end).toLocaleTimeString([], opts)}`;
+}
+
+// Tokens/min over the block's own active span (first to last write) — not
+// over the full 5h window, which would read as near-zero for a block that's
+// mostly idle time.
+function burnRate(b: UsageBlock): number | null {
+  const spanMin = (b.lastAt - b.firstAt) / 60_000;
+  if (spanMin < 0.5) return null;
+  return blockTotalTokens(b) / spanMin;
+}
+
+function UsagePanel() {
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      const data = await fetchUsage();
+      if (!cancelled && data) setUsage(data);
+    };
+    void poll();
+    const id = setInterval(poll, USAGE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  if (!usage) {
+    return <div className="autoretry-usage-empty">Loading…</div>;
+  }
+
+  const current = usage.blocks.find((b) => b.isCurrent);
+  const previous = usage.blocks.filter((b) => !b.isCurrent);
+  const rate = current ? burnRate(current) : null;
+
+  return (
+    <div className="autoretry-usage-panel">
+      {current ? (
+        <div className="autoretry-usage-current">
+          <div className="autoretry-usage-headline">{formatCount(blockTotalTokens(current))} tokens</div>
+          <div className="autoretry-usage-subline">
+            Current block · {formatTimeRange(current)}
+            {rate !== null ? ` · ${formatCount(rate)} tok/min` : ""}
+          </div>
+          <ul className="autoretry-usage-models">
+            {Object.entries(current.perModel).map(([model, t]) => (
+              <li key={model}>
+                {model}: {formatCount(t.input + t.output + t.cacheRead + t.cacheCreation)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="autoretry-usage-empty">No activity in the current block.</div>
+      )}
+      {previous.length > 0 && (
+        <div className="autoretry-usage-previous">
+          <div className="autoretry-usage-previous-header">Previous blocks</div>
+          {previous.map((b) => (
+            <div key={b.start} className="autoretry-usage-previous-row">
+              <span>{formatTimeRange(b)}</span>
+              <span>{formatCount(blockTotalTokens(b))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {usage.resetsAtWeekly && (
+        <div className="autoretry-usage-footnote">
+          Weekly limit resets {new Date(usage.resetsAtWeekly).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}.
+        </div>
+      )}
+      <div className="autoretry-usage-footnote">Estimated from local transcripts — not official rate-limit data.</div>
+    </div>
+  );
+}
+
 // ---- App overlay ----
 
 interface AppOverlayContext {
@@ -224,6 +352,13 @@ interface ExtensionContext {
     id: string;
     component: (props: { context: AppOverlayContext }) => ReturnType<typeof LimitToasts>;
   }): void;
+  registerSidebarPanel(panel: {
+    id: string;
+    title: string;
+    icon?: string;
+    location?: "tab" | "explorer" | "run" | "commands";
+    component: () => ReturnType<typeof UsagePanel>;
+  }): void;
   serverFetch(path: string, init?: RequestInit): Promise<Response>;
   app: AppApi;
   assetUrl(relPath: string): string;
@@ -234,6 +369,7 @@ export function activate(ctx: ExtensionContext): void {
   appApi = ctx.app;
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
   ctx.registerAppOverlay({ id: "limit-toasts", component: LimitToasts });
+  ctx.registerSidebarPanel({ id: "usage", title: "Claude Usage", icon: "graph-line", location: "run", component: UsagePanel });
 }
 
 export function deactivate(): void {

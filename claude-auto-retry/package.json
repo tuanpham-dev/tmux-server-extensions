@@ -2,9 +2,9 @@
   "name": "claude-auto-retry",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
-  "displayName": "Claude Auto-Retry",
-  "description": "Auto-continue Claude Code sessions after a usage-limit reset: detects the \"limit reached\" banner in tmux panes running claude, then either sends \"continue\" automatically after the reset (plus a configurable offset) or asks you first — your choice, with an abort/confirm toast either way.",
+  "version": "1.1.0",
+  "displayName": "Claude Usage & Auto-Retry",
+  "description": "Auto-continue Claude Code sessions after a usage-limit reset: detects the \"limit reached\" banner in tmux panes running claude, then either sends \"continue\" automatically after the reset (plus a configurable offset) or asks you first — with an abort/confirm toast either way. Also adds a CLAUDE USAGE panel showing token burn per 5-hour block, estimated from local transcripts.",
   "icon": "./icon.svg",
   "tmuxServer": {
     "client": "./dist/client.js",
