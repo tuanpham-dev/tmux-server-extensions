@@ -56,15 +56,18 @@ Other desktop environments work the same way — install it, then set `gui.deskt
 | `gui.desktopCommand` | `xfce4-session` | Full desktop mode only: the command that starts the desktop environment. |
 | `gui.resizeDisplay` | `auto` | `auto` follows the browser window's size (including xpra's own Fullscreen toggle); `fixed` locks the display at its initial resolution instead — see the cursor-size note below. |
 
-## Reclaiming browser shortcuts (Ctrl+W, Ctrl+T, …)
+## Reclaiming browser shortcuts
 
-The display tab has its own **fullscreen button** in its top-right corner (separate from xpra's own toolbar — see note below) that does two things together: puts the display in real browser fullscreen, and (Chromium-based browsers only) locks the keyboard so shortcuts like Ctrl+W and Ctrl+T reach the display instead of your browser. Escape always exits fullscreen regardless, so there's no way to get stuck. Everything else (including most app shortcuts) already passes through normally without it.
+The display tab has its own **fullscreen button** in its top-right corner (separate from xpra's own toolbar — see note below) that does two things together: puts the display in real browser fullscreen, and (Chromium-based browsers only) locks the keyboard so most browser-reserved shortcuts reach the display instead of your browser. Escape always exits fullscreen regardless, so there's no way to get stuck. Everything else (including most app shortcuts) already passes through normally without it.
+
+**Ctrl+W (and similar tab/window-closing shortcuts, e.g. Ctrl+Shift+W) are the one exception** — confirmed still closing the browser tab even with the fullscreen button active, in real-world testing on Chrome. Keyboard Lock's own spec doesn't document this explicitly, but Chrome appears to keep tab/window-closing shortcuts permanently reserved regardless of Keyboard Lock, as a hardcoded guarantee that a fullscreen page can never trap a user with no way out. There's no client-side fix for this — it's enforced by the browser itself, not something a page can override.
 
 xpra's own **"Fullscreen" icon inside its toolbar** (the hamburger-style row at the top of the display itself) does something different and unrelated: it's an X11 window-level fullscreen hint that resizes the remote display to fill the tab — it does not touch the browser's real fullscreen or keyboard APIs, so it doesn't reclaim any shortcuts. Use our button (outside the iframe, top-right corner) for that.
 
 ## Known limitations
 
 - Keyboard Lock is Chromium-only (not supported in Firefox/Safari) — on those browsers the fullscreen button still works, just without reclaiming shortcuts.
+- **Ctrl+W still closes the tab even in fullscreen** (Chromium) — see "Reclaiming browser shortcuts" above; this appears to be a browser-enforced exception, not something the extension can override.
 - One shared display per host for v1 — all launched apps land on the same desktop, not isolated per app.
 - **Full desktop mode:** logging out of the desktop environment (rather than clicking **Stop**) leaves xpra itself running with an empty display — the session still shows as "running" in the panel, just with nothing to look at. Click **Stop** and **Start** again to get a fresh desktop.
 - **Oversized cursor/UI after resizing:** with `gui.resizeDisplay` at its default (`auto`), resizing the browser window — including via xpra's own Fullscreen toggle above — makes xpra recalculate DPI from the reported physical monitor size, which can drift far enough from `gui.dpi` to make the cursor and UI elements balloon in size. Set `gui.resizeDisplay` to `fixed` to stop this (tradeoff: the display then scales to fit your window instead of resizing natively, so text can look slightly softer).

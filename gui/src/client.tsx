@@ -188,10 +188,13 @@ interface GuiViewProps {
 // xpra's own HTML5 client has a "Fullscreen" toolbar button, but it only
 // sets an X11 window-level fullscreen hint (resizing the remote display to
 // fill the tab) — it never calls the browser's real Fullscreen API, so it
-// never actually reclaims browser-reserved shortcuts (Ctrl+W, Ctrl+T, …)
-// from the tab. This button does that for real: requestFullscreen() on the
-// iframe plus the Keyboard Lock API (Chromium-only — feature-detected,
-// silently a no-op elsewhere) while fullscreen.
+// never actually reclaims browser-reserved shortcuts from the tab. This
+// button does that for real: requestFullscreen() on the iframe plus the
+// Keyboard Lock API (Chromium-only — feature-detected, silently a no-op
+// elsewhere) while fullscreen. Confirmed exception: Ctrl+W (and similar
+// tab/window-closing shortcuts) still closes the tab even with Keyboard
+// Lock active — Chrome appears to keep those permanently reserved as a
+// guarantee against a fullscreen page trapping the user. See README.
 function FullscreenButton({ targetRef }: { targetRef: React.RefObject<HTMLIFrameElement | null> }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const keyboardLockSupported = typeof navigator !== "undefined" && !!(navigator as unknown as { keyboard?: { lock?: unknown } }).keyboard?.lock;
@@ -230,7 +233,7 @@ function FullscreenButton({ targetRef }: { targetRef: React.RefObject<HTMLIFrame
   };
 
   return (
-    <button className="gui-view-fullscreen-btn" onClick={() => void toggle()} title={isFullscreen ? "Exit fullscreen" : "Fullscreen (also reclaims browser shortcuts like Ctrl+W in Chromium)"}>
+    <button className="gui-view-fullscreen-btn" onClick={() => void toggle()} title={isFullscreen ? "Exit fullscreen" : "Fullscreen (also reclaims most browser shortcuts in Chromium — not Ctrl+W)"}>
       <Icon name={isFullscreen ? "screen-normal" : "screen-full"} />
     </button>
   );
