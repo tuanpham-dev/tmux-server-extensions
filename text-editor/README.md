@@ -5,6 +5,17 @@ quick edit without a round-trip through nvim. Registers as a **preview** viewer 
 default: a FILES-tree click still opens nvim as usual; this is reached via the hover
 Preview icon, the "Preview" context-menu item, or Shift+Enter.
 
+## Syntax highlighting
+
+Colors come from a real TextMate tokenizer (Shiki, on its pure-JS regex engine — no
+WASM asset to serve) resolved against the *active theme's own* `tokenColors`, read
+live from the host app (`ctx.app.getTokenColors()`/`getThemeColors()`), plus
+VS-Code-style bracket-pair depth coloring ((), {}, [] cycling through the theme's dark
+or light default 3-color palette, using the language's own parse tree so brackets
+inside strings/comments are correctly skipped). Recolors in place, no reload, when the
+theme changes in Settings. This is real per-scope theme fidelity, not an approximation
+— see `src/tmHighlight.ts`/`src/textmate.ts` for the mechanics.
+
 ## Supported languages
 
 Syntax highlighting is bundled for JS/JSX, TS/TSX, JSON, CSS, HTML, Markdown, and

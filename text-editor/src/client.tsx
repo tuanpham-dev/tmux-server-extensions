@@ -20,15 +20,62 @@ import { injectStylesheet } from "./injectStylesheet";
 import Icon from "./Icon";
 import { downloadUrl, fetchFileText, saveFileText } from "./fileApi";
 import { EditorState } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
-import { basicSetup } from "codemirror";
-import type { LanguageSupport } from "@codemirror/language";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  drawSelection,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+  highlightActiveLine,
+} from "@codemirror/view";
+import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
+import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
+import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
+import { lintKeymap } from "@codemirror/lint";
+import { foldGutter, indentOnInput, bracketMatching, foldKeymap, type LanguageSupport } from "@codemirror/language";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
 import { css } from "@codemirror/lang-css";
 import { html } from "@codemirror/lang-html";
 import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
+import { tmHighlight } from "./tmHighlight";
+import type { TokenColorRule } from "./textmate";
+
+// The same extension list as codemirror's own `basicSetup` (see that
+// package's dist/index.js), minus `syntaxHighlighting(defaultHighlightStyle,
+// {fallback: true})`. That fallback style isn't actually a no-op alongside
+// tmHighlight: CodeMirror renders tmHighlight's inline-styled Decoration.mark
+// and the fallback's own class-styled one as nested spans for the same
+// token, and CSS gives an element's own specified color priority over an
+// ancestor's *regardless of the ancestor's specificity* — so the fallback's
+// class-based color silently won for every token lezer's parser assigns a
+// highlighting tag to, which is most of them. `fallback: true` only means
+// "yield to another HighlightStyle for the same tag"; it has no way to
+// detect an unrelated hand-rolled decoration like tmHighlight's.
+const editorSetup = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  history(),
+  foldGutter(),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  bracketMatching(),
+  closeBrackets(),
+  autocompletion(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap, ...lintKeymap]),
+];
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -47,6 +94,30 @@ const INLINE_LANGS: Record<string, () => LanguageSupport> = {
   markdown: () => markdown(),
   py: () => python(),
 };
+
+// Extension -> Shiki grammar name, for tmHighlight's real TextMate
+// tokenization — a separate map from INLINE_LANGS above since Shiki's tsx
+// grammar (a JSX-aware superset) covers both .tsx and .jsx, where
+// CodeMirror's own @codemirror/lang-javascript takes a `jsx` option instead
+// of a separate language.
+const SHIKI_LANG_FOR: Record<string, string> = {
+  ts: "typescript",
+  tsx: "tsx",
+  jsx: "tsx",
+  js: "javascript",
+  mjs: "javascript",
+  cjs: "javascript",
+  css: "css",
+  html: "html",
+  htm: "html",
+  md: "markdown",
+  markdown: "markdown",
+  py: "python",
+};
+
+function shikiLangFor(filePath: string): string | null {
+  return SHIKI_LANG_FOR[extOf(filePath)] ?? null;
+}
 
 function extOf(filePath: string): string {
   const slash = filePath.lastIndexOf("/");
@@ -173,13 +244,22 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
         return;
       }
       const langExt = languageFor(filePath);
+      const shikiLang = shikiLangFor(filePath);
       if (cancelled || !containerRef.current) return;
 
       originalRef.current = text;
       const state = EditorState.create({
         doc: text,
         extensions: [
-          basicSetup,
+          editorSetup,
+          tmHighlight({
+            getLangId: () => shikiLang,
+            getTheme: () => ({
+              colors: themeApi?.getThemeColors() ?? {},
+              tokenColors: themeApi?.getTokenColors() ?? [],
+            }),
+            subscribeThemeChange: (cb) => themeApi?.onDidChangeColorTheme(cb) ?? (() => {}),
+          }),
           ...(langExt ? [langExt] : []),
           keymap.of([
             {
@@ -253,6 +333,11 @@ interface ExtensionContext {
   }): void;
   assetUrl(relPath: string): string;
   settings: SettingsApi;
+  app: {
+    getThemeColors(): Record<string, string>;
+    getTokenColors(): TokenColorRule[];
+    onDidChangeColorTheme(cb: () => void): () => void;
+  };
 }
 
 // Deliberately excludes extensions with an existing dedicated bundled viewer
@@ -273,9 +358,14 @@ function parseExtensions(raw: unknown): string[] {
 }
 
 let removeStylesheet: (() => void) | null = null;
+// Captured at activation, same as removeStylesheet above — TextEditorView is
+// registered once via registerFileViewer (not passed ctx as a prop), so
+// tmHighlight reaches the theme API through this module-level reference.
+let themeApi: ExtensionContext["app"] | null = null;
 
 export function activate(ctx: ExtensionContext): void {
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
+  themeApi = ctx.app;
   const extensions = parseExtensions(ctx.settings.get("textEditor.extensions"));
   const openOnClick = ctx.settings.get("textEditor.openOnClick") === true;
   ctx.registerFileViewer({
@@ -289,4 +379,5 @@ export function activate(ctx: ExtensionContext): void {
 export function deactivate(): void {
   removeStylesheet?.();
   removeStylesheet = null;
+  themeApi = null;
 }

@@ -37,3 +37,7 @@
   background: var(--fg-accent, #4fa8ff);
   margin-right: 6px;
 }
+
+/* Syntax highlighting colors are set inline per token by tmHighlight.ts,
+   resolved from the active theme's real tokenColors via a Shiki TextMate
+   tokenizer — no CSS classes involved. */
