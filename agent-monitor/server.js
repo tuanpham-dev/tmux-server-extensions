@@ -1,6 +1,7 @@
 // agent-monitor server hook: lists every tmux pane running a configured
-// agent program and classifies each as working/waiting/done — the AGENTS
-// sidebar tab's data source. Detection is Orca-style dual-signal:
+// agent program and classifies each as working/waiting/done — the source
+// for the PROJECTS-pane window-row status dot. Detection is Orca-style
+// dual-signal:
 //
 //   1. an opt-in Claude Code hooks event (POST /event, see the bottom of this
 //      file) for the pane's resolved Claude session id, when fresher than

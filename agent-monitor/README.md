@@ -1,8 +1,11 @@
 # Agent Monitor
 
-An AGENTS sidebar tab listing every tmux pane running an AI coding agent, each with a
-working / waiting / done state, plus a tab badge counting how many are waiting on you.
-"Which of my agents needs me?" at a glance, without opening every tab.
+Classifies every tmux pane running an AI coding agent as working / waiting / done, and
+shows it as a colored status dot on that window's own row in the PROJECTS pane (working
+= green, waiting = amber, permission-blocked = orange; `done` gets no dot — it's the
+steady idle state most agent panes sit in, and a permanent dot there would be noise,
+not signal). "Which of my agents needs me?" at a glance, without opening every tab —
+built assuming one window per tab, so a window's dot always reflects a single pane.
 
 ## How it works
 

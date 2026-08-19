@@ -1,8 +1,8 @@
-// agent-monitor: the AGENTS sidebar tab — every tmux pane running an agent
-// program (default: claude), each with a working/waiting/done state — plus
-// the tab badge counting agents waiting on you, and a Settings section for
-// the optional Claude Code hooks upgrade. Host hooks arrive via module-level
-// bridge variables set once in activate(), same pattern as every other
+// agent-monitor: every tmux pane running an agent program (default: claude),
+// classified working/waiting/done and shown as a status dot on that
+// window's own PROJECTS-pane row — plus a Settings section for the optional
+// Claude Code hooks upgrade. Host hooks arrive via module-level bridge
+// variables set once in activate(), same pattern as every other
 // bundled-style extension (search, git-scm, worktrees).
 import { useCallback, useEffect, useState } from "react";
 import "./style.css";
@@ -11,8 +11,6 @@ import { injectStylesheet } from "./injectStylesheet";
 // ---- Module-level host bridge ----
 
 let serverFetch: ((path: string, init?: RequestInit) => Promise<Response>) | null = null;
-let openSessionWindow: ((sessionName: string, opts?: { createCwd?: string }) => void) | null = null;
-let setSidebarBadge: ((panelId: string, badge: number | null) => void) | null = null;
 let removeStylesheet: (() => void) | null = null;
 // Parsed from ctx.assetUrl() at activate() time — see live-preview's
 // client.tsx for why this is how an extension recovers its own hook base.
@@ -40,14 +38,6 @@ async function fetchAgents(): Promise<AgentRow[]> {
   return body.agents;
 }
 
-// Same basename convention as core's projectName (client/src/lib/projects.ts)
-// — a `~`-shortened path's last segment, or "/" for the root.
-function projectName(cwd: string): string {
-  const trimmed = cwd.replace(/\/+$/, "");
-  const base = trimmed.slice(trimmed.lastIndexOf("/") + 1);
-  return base || trimmed || "/";
-}
-
 function relativeTime(at: number | null): string {
   if (at === null) return "";
   const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
@@ -63,64 +53,25 @@ function rowKey(row: AgentRow): string {
   return `${row.sessionName}:${row.windowIndex}`;
 }
 
-// ---- AGENTS panel ----
+// ---- Window-row decoration (PROJECTS pane) ----
+//
+// This app is designed 1 window per tab, so a (sessionName, windowIndex)
+// pair identifies at most one agent pane in practice — no merge rule needed
+// for multiple agents sharing a row. "done" gets no badge: it's the steady
+// state a claude pane sits in most of the time (finished responding, idle
+// for new input) — a permanent dot on every idle claude window would be
+// more noise than signal.
+let agentsByWindowKey = new Map<string, AgentRow>();
+let refreshDecorations: (() => void) | null = null;
 
-const PANEL_POLL_MS = 3000;
-
-function AgentsPanel() {
-  const [agents, setAgents] = useState<AgentRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
-
-  const refresh = useCallback(() => {
-    fetchAgents()
-      .then((rows) => {
-        setAgents(rows);
-        setError(null);
-      })
-      .catch((err: Error) => setError(err.message));
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const timer = window.setInterval(refresh, PANEL_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-
-  if (error) {
-    return <div className="agent-monitor-error">{error}</div>;
-  }
-
-  if (agents.length === 0) {
-    return <div className="agent-monitor-empty">No agents running.</div>;
-  }
-
-  return (
-    <ul className="agent-monitor-list">
-      {agents.map((row) => (
-        <li key={rowKey(row)}>
-          <div
-            className={`agent-monitor-row agent-monitor-row-${row.state}${row.stateDetail ? ` agent-monitor-row-${row.stateDetail}` : ""}`}
-            role="button"
-            tabIndex={0}
-            title={row.cwd}
-            onClick={() => openSessionWindow?.(row.sessionName)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                openSessionWindow?.(row.sessionName);
-              }
-            }}
-          >
-            <span className="agent-monitor-dot" aria-hidden="true" />
-            <span className="agent-monitor-project">{projectName(row.cwd)}</span>
-            <span className="agent-monitor-window">{row.windowName || `#${row.windowIndex}`}</span>
-            {row.taskLabel && <span className="agent-monitor-task">{row.taskLabel}</span>}
-            <span className="agent-monitor-time">{relativeTime(row.lastActivityAt)}</span>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
+function decorationFor(row: AgentRow | undefined): { badge: string; tooltip: string; className: string } | undefined {
+  if (!row || row.state === "done") return undefined;
+  const label = row.state === "waiting" ? "Waiting for you" : "Working";
+  return {
+    badge: "●",
+    tooltip: row.taskLabel ? `${label} — ${row.taskLabel}` : label,
+    className: `agent-monitor-badge-${row.stateDetail ?? row.state}`,
+  };
 }
 
 // ---- Settings component: the opt-in Claude Code hooks snippet (T18) ----
@@ -192,70 +143,67 @@ function AgentHooksSettings() {
 
 // ---- Activation ----
 
-interface ExtensionContext {
-  registerSidebarPanel(panel: {
-    id: string;
-    title: string;
-    icon?: string;
-    location?: "tab" | "explorer" | "run" | "commands";
-    focusBinding?: string;
-    component: () => ReturnType<typeof AgentsPanel>;
-  }): void;
-  registerSettingsComponent(component: { id: string; component: () => ReturnType<typeof AgentHooksSettings> }): void;
-  serverFetch(path: string, init?: RequestInit): Promise<Response>;
-  assetUrl(relPath: string): string;
-  app: {
-    openSessionWindow(sessionName: string, opts?: { createCwd?: string }): void;
-    setSidebarBadge(panelId: string, badge: number | null): void;
-  };
+interface SessionDecorationContext {
+  sessionName: string;
+  windowIndex: number;
+  cwd: string;
+  command: string;
 }
 
-const PANEL_ID = "agents";
+interface ExtensionContext {
+  registerSettingsComponent(component: { id: string; component: () => ReturnType<typeof AgentHooksSettings> }): void;
+  registerSessionDecorationProvider(provider: {
+    id: string;
+    provideWindowDecoration: (
+      ctx: SessionDecorationContext,
+    ) => { badge: string; tooltip?: string; className?: string } | undefined;
+  }): { refresh(): void };
+  serverFetch(path: string, init?: RequestInit): Promise<Response>;
+  assetUrl(relPath: string): string;
+}
 
-// Independent of the panel's own mount lifecycle — the badge stays live even
-// while the AGENTS tab isn't the active sidebar tab.
-const BADGE_POLL_MS = 10_000;
-let badgeTimer: number | null = null;
+const POLL_MS = 10_000;
+let pollTimer: number | null = null;
 
 export function activate(ctx: ExtensionContext): void {
   serverFetch = ctx.serverFetch;
-  openSessionWindow = ctx.app.openSessionWindow;
-  setSidebarBadge = ctx.app.setSidebarBadge;
   const match = ctx.assetUrl("x").match(/^(\/api\/extensions\/[^/]+)\/file\//);
   hookBase = match ? match[1].replace("/extensions/", "/ext/") : "";
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
-
-  ctx.registerSidebarPanel({
-    id: PANEL_ID,
-    title: "Agents",
-    icon: "robot",
-    component: AgentsPanel,
-  });
 
   ctx.registerSettingsComponent({
     id: "agentHooks",
     component: AgentHooksSettings,
   });
 
-  const updateBadge = () => {
+  refreshDecorations = ctx.registerSessionDecorationProvider({
+    id: "agents",
+    provideWindowDecoration(win) {
+      return decorationFor(agentsByWindowKey.get(`${win.sessionName}:${win.windowIndex}`));
+    },
+  }).refresh;
+
+  const poll = () => {
     fetchAgents()
       .then((rows) => {
-        const waiting = rows.filter((r) => r.state === "waiting").length;
-        setSidebarBadge?.(PANEL_ID, waiting > 0 ? waiting : null);
+        agentsByWindowKey = new Map(rows.map((r) => [rowKey(r), r]));
+        refreshDecorations?.();
       })
       .catch(() => {
         // Transient — next poll retries.
       });
   };
-  updateBadge();
-  badgeTimer = window.setInterval(updateBadge, BADGE_POLL_MS);
+  poll();
+  pollTimer = window.setInterval(poll, POLL_MS);
 }
 
 export function deactivate(): void {
   removeStylesheet?.();
   removeStylesheet = null;
-  if (badgeTimer !== null) {
-    window.clearInterval(badgeTimer);
-    badgeTimer = null;
+  refreshDecorations = null;
+  agentsByWindowKey = new Map();
+  if (pollTimer !== null) {
+    window.clearInterval(pollTimer);
+    pollTimer = null;
   }
 }
