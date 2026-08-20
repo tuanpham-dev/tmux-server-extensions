@@ -99,12 +99,17 @@ function sleep(ms: number): Promise<void> {
 
 // POSTs to the core send-text route (docs/EXTENSION_API.md: a public core
 // route, fine to hit with a plain fetch). Throws with the server's error
-// message on failure.
+// message on failure. windowIndex targets a specific window within the
+// session — omitting it targets tmux's own "current" (last-focused) window
+// for that session, not necessarily the one the caller resolved via
+// agentWindows() (a repo session can have several windows, only one of
+// them running the agent). Every AgentWindow agentWindows() returns already
+// carries its own windowIndex; pass it through rather than dropping it.
 export async function sendToAgent(
   sessionName: string,
   text: string,
   submit: boolean,
-  opts?: SendToAgentOptions,
+  opts?: SendToAgentOptions & { windowIndex?: number },
 ): Promise<void> {
   const retries = opts?.retries ?? 0;
   const retryDelayMs = opts?.retryDelayMs ?? 0;
@@ -113,7 +118,7 @@ export async function sendToAgent(
     const res = await fetch(`/api/sessions/${encodeURIComponent(sessionName)}/send-text`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text, submit }),
+      body: JSON.stringify({ text, submit, windowIndex: opts?.windowIndex }),
     });
     if (res.ok) return;
     if (res.status === 404 && attempt < retries) {
