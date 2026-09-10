@@ -1,138 +1,43 @@
-// text-editor: a CodeMirror-based file viewer with syntax highlighting and
-// save-back to disk — for a quick edit without a round-trip through nvim.
-// Registered "preview" by default (a FILES click still opens nvim; this is
-// reached via the hover Preview icon, the context menu, or Shift+Enter);
-// textEditor.openOnClick switches it to "default" mode instead.
+// text-editor: a Monaco-based file viewer — the VS Code editor, with its find
+// widget, multi-cursor, folding and IntelliSense — plus save-back to disk, for
+// a quick edit without a round-trip through nvim. Registered "preview" by
+// default (a FILES click still opens nvim; this is reached via the hover
+// Preview icon, the context menu, or Shift+Enter); textEditor.openOnClick
+// switches it to "default" mode instead.
 //
-// Grammar bundling: only the everyday languages (js/ts(x), json, css,
-// html, markdown, python) are imported and inlined — @codemirror/language-
-// data was tried and dropped: this build pipeline has no code-splitting
-// (esbuild bundles a single dist/client.js per extension, no outdir+
-// splitting), so a dynamic import() of it still gets inlined synchronously
-// and its "languages" array statically pulls in ~30 legacy-mode/lang-*
-// packages regardless (measured: 2.7MB bundle, vs ~500KB without it). A
-// file outside the inline set just renders as plain text — a reasonable,
-// honest degradation, not a broken viewer.
+// Only this file and its small siblings are loaded eagerly at activation.
+// Monaco itself arrives from dist/chunks/monaco.js the first time a tab mounts
+// (monacoLoader.ts), and each language service's worker is fetched by Monaco on
+// demand from dist/workers/ — so the cost of having this extension enabled but
+// unused is a few KB.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import "./style.css";
 import { injectStylesheet } from "./injectStylesheet";
 import Icon from "./Icon";
 import { downloadUrl, fetchFileText, saveFileText } from "./fileApi";
-import { EditorState } from "@codemirror/state";
-import {
-  EditorView,
-  keymap,
-  lineNumbers,
-  highlightActiveLineGutter,
-  highlightSpecialChars,
-  drawSelection,
-  dropCursor,
-  rectangularSelection,
-  crosshairCursor,
-  highlightActiveLine,
-} from "@codemirror/view";
-import { history, defaultKeymap, historyKeymap } from "@codemirror/commands";
-import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { closeBrackets, autocompletion, closeBracketsKeymap, completionKeymap } from "@codemirror/autocomplete";
-import { lintKeymap } from "@codemirror/lint";
-import { foldGutter, indentOnInput, bracketMatching, foldKeymap, type LanguageSupport } from "@codemirror/language";
-import { javascript } from "@codemirror/lang-javascript";
-import { json } from "@codemirror/lang-json";
-import { css } from "@codemirror/lang-css";
-import { html } from "@codemirror/lang-html";
-import { markdown } from "@codemirror/lang-markdown";
-import { python } from "@codemirror/lang-python";
-import { tmHighlight } from "./tmHighlight";
-import type { TokenColorRule } from "./textmate";
-
-// The same extension list as codemirror's own `basicSetup` (see that
-// package's dist/index.js), minus `syntaxHighlighting(defaultHighlightStyle,
-// {fallback: true})`. That fallback style isn't actually a no-op alongside
-// tmHighlight: CodeMirror renders tmHighlight's inline-styled Decoration.mark
-// and the fallback's own class-styled one as nested spans for the same
-// token, and CSS gives an element's own specified color priority over an
-// ancestor's *regardless of the ancestor's specificity* — so the fallback's
-// class-based color silently won for every token lezer's parser assigns a
-// highlighting tag to, which is most of them. `fallback: true` only means
-// "yield to another HighlightStyle for the same tag"; it has no way to
-// detect an unrelated hand-rolled decoration like tmHighlight's.
-const editorSetup = [
-  lineNumbers(),
-  highlightActiveLineGutter(),
-  highlightSpecialChars(),
-  history(),
-  foldGutter(),
-  drawSelection(),
-  dropCursor(),
-  EditorState.allowMultipleSelections.of(true),
-  indentOnInput(),
-  bracketMatching(),
-  closeBrackets(),
-  autocompletion(),
-  rectangularSelection(),
-  crosshairCursor(),
-  highlightActiveLine(),
-  highlightSelectionMatches(),
-  keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...searchKeymap, ...historyKeymap, ...foldKeymap, ...completionKeymap, ...lintKeymap]),
-];
+import { loadMonaco, refreshTheme, unloadMonaco, type ThemeApi } from "./monacoLoader";
+import type { StandaloneEditor } from "./monacoNs";
+import { acquireFile, disposeAllFiles, isDirty, markSaved, type FileEntry } from "./models";
+import type { TokenColorRule } from "./shikiTheme";
 
 const MAX_BYTES = 2 * 1024 * 1024;
+const DEFAULT_FONT_SIZE = 13;
 
-const INLINE_LANGS: Record<string, () => LanguageSupport> = {
-  js: () => javascript(),
-  jsx: () => javascript({ jsx: true }),
-  mjs: () => javascript(),
-  cjs: () => javascript(),
-  ts: () => javascript({ typescript: true }),
-  tsx: () => javascript({ typescript: true, jsx: true }),
-  json: () => json(),
-  css: () => css(),
-  html: () => html(),
-  htm: () => html(),
-  md: () => markdown(),
-  markdown: () => markdown(),
-  py: () => python(),
-};
-
-// Extension -> Shiki grammar name, for tmHighlight's real TextMate
-// tokenization — a separate map from INLINE_LANGS above since Shiki's tsx
-// grammar (a JSX-aware superset) covers both .tsx and .jsx, where
-// CodeMirror's own @codemirror/lang-javascript takes a `jsx` option instead
-// of a separate language.
-const SHIKI_LANG_FOR: Record<string, string> = {
-  ts: "typescript",
-  tsx: "tsx",
-  jsx: "tsx",
-  js: "javascript",
-  mjs: "javascript",
-  cjs: "javascript",
+// Monaco asks for a worker by language-service label; anything unlisted (the
+// plain editor services: diff, links, word-based suggestions) gets the core
+// editor worker.
+const WORKER_FOR: Record<string, string> = {
+  json: "json",
   css: "css",
+  scss: "css",
+  less: "css",
   html: "html",
-  htm: "html",
-  md: "markdown",
-  markdown: "markdown",
-  py: "python",
+  handlebars: "html",
+  razor: "html",
+  typescript: "ts",
+  javascript: "ts",
 };
-
-function shikiLangFor(filePath: string): string | null {
-  return SHIKI_LANG_FOR[extOf(filePath)] ?? null;
-}
-
-function extOf(filePath: string): string {
-  const slash = filePath.lastIndexOf("/");
-  const name = slash === -1 ? filePath : filePath.slice(slash + 1);
-  const dot = name.lastIndexOf(".");
-  return dot === -1 ? "" : name.slice(dot + 1).toLowerCase();
-}
-
-// A file extension outside INLINE_LANGS renders as plain text — see the
-// module comment on why this build doesn't lazy-load a broader language set.
-function languageFor(filePath: string): LanguageSupport | null {
-  const ext = extOf(filePath);
-  const inline = INLINE_LANGS[ext];
-  return inline ? inline() : null;
-}
 
 async function headSize(filePath: string): Promise<number | null> {
   try {
@@ -148,27 +53,23 @@ function looksBinary(text: string): boolean {
   return text.slice(0, 8000).includes("\0");
 }
 
-function cmTheme(fontSize?: number) {
-  return EditorView.theme({
-    "&": {
-      height: "100%",
-      fontSize: fontSize ? `${fontSize}px` : "var(--terminal-font-size, 13px)",
-      backgroundColor: "var(--bg)",
-      color: "var(--fg)",
-    },
-    ".cm-content": {
-      fontFamily: "var(--terminal-font, monospace)",
-      caretColor: "var(--fg)",
-    },
-    ".cm-gutters": {
-      backgroundColor: "var(--sidebar-header-bg)",
-      color: "var(--fg-inactive)",
-      border: "none",
-    },
-    "&.cm-focused": { outline: "none" },
-    "&.cm-editor": { height: "100%" },
-    ".cm-scroller": { overflow: "auto" },
-  });
+// The guards run before the model is created, so a refusal never leaves a
+// half-loaded editor behind — and because they live in the loader passed to
+// acquireFile, a second tab on the same path inherits the same verdict.
+async function loadFileText(filePath: string): Promise<string> {
+  const size = await headSize(filePath);
+  if (size !== null && size > MAX_BYTES) {
+    throw new Error("File is too large to edit here (over 2MB) — open it in another viewer.");
+  }
+  const text = await fetchFileText(filePath);
+  if (looksBinary(text)) {
+    throw new Error("This file looks binary — open it in another viewer.");
+  }
+  return text;
+}
+
+function messageOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 interface Props {
@@ -181,9 +82,17 @@ interface Props {
 
 function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
-  const originalRef = useRef<string>("");
+  const editorRef = useRef<StandaloneEditor | null>(null);
+  const entryRef = useRef<FileEntry | null>(null);
   const saveRef = useRef<() => void>(() => {});
+  // Read inside the mount effect, which deliberately doesn't re-run for these:
+  // a font-size change updates options in place, and the host's setDirty
+  // identity must never be able to force a reload of the file.
+  const fontSizeRef = useRef(fontSize);
+  const setDirtyRef = useRef(setDirty);
+  fontSizeRef.current = fontSize;
+  setDirtyRef.current = setDirty;
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -191,21 +100,22 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
   const [dirty, setDirtyState] = useState(false);
 
   const save = useCallback(async () => {
-    if (!viewRef.current) return;
-    const content = viewRef.current.state.doc.toString();
+    const entry = entryRef.current;
+    if (!entry?.model) return;
+    const content = entry.model.getValue();
     setSaving(true);
     setSaveError(null);
     try {
       await saveFileText(filePath, content);
-      originalRef.current = content;
-      setDirtyState(false);
-      setDirty?.(false);
+      // Shared baseline: a save in either split pane clears the dirty flag in
+      // both, since they are the same document.
+      markSaved(entry, content);
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(messageOf(err));
     } finally {
       setSaving(false);
     }
-  }, [filePath, setDirty]);
+  }, [filePath]);
 
   useEffect(() => {
     saveRef.current = () => void save();
@@ -213,91 +123,84 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
 
   useEffect(() => {
     let cancelled = false;
+    let release: (() => void) | null = null;
+    let teardownEditor: (() => void) | null = null;
     setLoading(true);
     setError(null);
     setSaveError(null);
 
     (async () => {
-      const size = await headSize(filePath);
-      if (size !== null && size > MAX_BYTES) {
-        if (!cancelled) {
-          setError("File is too large to edit here (over 2MB) — open it in another viewer.");
-          setLoading(false);
-        }
-        return;
-      }
-      let text: string;
       try {
-        text = await fetchFileText(filePath);
+        if (!hostAssetUrl || !hostThemeApi) throw new Error("The Text Editor extension is not active.");
+        const monaco = await loadMonaco(hostAssetUrl, hostThemeApi);
+        if (cancelled) return;
+
+        const acquired = acquireFile(monaco, filePath, () => loadFileText(filePath));
+        release = acquired.release;
+        entryRef.current = acquired.entry;
+        const model = await acquired.entry.ready;
+        if (cancelled || !containerRef.current) return;
+
+        const editor = monaco.editor.create(containerRef.current, {
+          model,
+          // The host keeps inactive tabs mounted but hidden, so the editor has
+          // no size until its tab is revealed; automaticLayout picks that up
+          // (the `active` effect below re-measures immediately as a belt-and-
+          // braces for the reveal frame).
+          automaticLayout: true,
+          scrollBeyondLastLine: false,
+          fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font").trim() || "monospace",
+          fontSize: fontSizeRef.current ?? DEFAULT_FONT_SIZE,
+          // A minimap is dead weight on a phone-width tab.
+          minimap: { enabled: !matchMedia("(pointer: coarse) and (hover: none)").matches },
+          renderWhitespace: "selection",
+        });
+        editorRef.current = editor;
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current());
+
+        const sync = () => {
+          const nowDirty = isDirty(acquired.entry);
+          setDirtyState(nowDirty);
+          setDirtyRef.current?.(nowDirty);
+        };
+        acquired.entry.listeners.add(sync);
+        sync();
+
+        teardownEditor = () => {
+          acquired.entry.listeners.delete(sync);
+          editor.dispose();
+        };
+        setLoading(false);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : String(err));
+          setError(messageOf(err));
           setLoading(false);
         }
-        return;
       }
-      if (looksBinary(text)) {
-        if (!cancelled) {
-          setError("This file looks binary — open it in another viewer.");
-          setLoading(false);
-        }
-        return;
-      }
-      const langExt = languageFor(filePath);
-      const shikiLang = shikiLangFor(filePath);
-      if (cancelled || !containerRef.current) return;
-
-      originalRef.current = text;
-      const state = EditorState.create({
-        doc: text,
-        extensions: [
-          editorSetup,
-          tmHighlight({
-            getLangId: () => shikiLang,
-            getTheme: () => ({
-              colors: themeApi?.getThemeColors() ?? {},
-              tokenColors: themeApi?.getTokenColors() ?? [],
-            }),
-            subscribeThemeChange: (cb) => themeApi?.onDidChangeColorTheme(cb) ?? (() => {}),
-          }),
-          ...(langExt ? [langExt] : []),
-          keymap.of([
-            {
-              key: "Mod-s",
-              preventDefault: true,
-              run: () => {
-                saveRef.current();
-                return true;
-              },
-            },
-          ]),
-          EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
-            const isDirty = update.state.doc.toString() !== originalRef.current;
-            setDirtyState(isDirty);
-            setDirty?.(isDirty);
-          }),
-          cmTheme(fontSize),
-        ],
-      });
-      viewRef.current?.destroy();
-      viewRef.current = new EditorView({ state, parent: containerRef.current });
-      setLoading(false);
     })();
 
     return () => {
       cancelled = true;
-      viewRef.current?.destroy();
-      viewRef.current = null;
+      teardownEditor?.();
+      editorRef.current = null;
+      entryRef.current = null;
+      release?.();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filePath, fontSize]);
+  }, [filePath]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions({ fontSize: fontSize ?? DEFAULT_FONT_SIZE });
+  }, [fontSize]);
+
+  useEffect(() => {
+    if (active) editorRef.current?.layout();
+  }, [active]);
 
   return (
     <div className={`text-editor-host${active ? "" : " hidden"}`}>
       {error && <div className="text-editor-status text-editor-error">{error}</div>}
-      {!error && loading && <div className="text-editor-status">Loading…</div>}
-      {!error && <div ref={containerRef} className="text-editor-cm" />}
+      {!error && loading && <div className="text-editor-status">Loading editor…</div>}
+      {!error && <div ref={containerRef} className="text-editor-monaco" />}
       {active &&
         toolbarTarget &&
         createPortal(
@@ -333,9 +236,7 @@ interface ExtensionContext {
   }): void;
   assetUrl(relPath: string): string;
   settings: SettingsApi;
-  app: {
-    getThemeColors(): Record<string, string>;
-    getTokenColors(): TokenColorRule[];
+  app: ThemeApi & {
     onDidChangeColorTheme(cb: () => void): () => void;
   };
 }
@@ -358,14 +259,33 @@ function parseExtensions(raw: unknown): string[] {
 }
 
 let removeStylesheet: (() => void) | null = null;
+let unsubscribeTheme: (() => void) | null = null;
 // Captured at activation, same as removeStylesheet above — TextEditorView is
-// registered once via registerFileViewer (not passed ctx as a prop), so
-// tmHighlight reaches the theme API through this module-level reference.
-let themeApi: ExtensionContext["app"] | null = null;
+// registered once via registerFileViewer (not passed ctx as a prop), so the
+// component reaches the host's asset resolver and theme API through these.
+let hostAssetUrl: ((relPath: string) => string) | null = null;
+let hostThemeApi: ThemeApi | null = null;
 
 export function activate(ctx: ExtensionContext): void {
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
-  themeApi = ctx.app;
+  hostAssetUrl = ctx.assetUrl;
+  hostThemeApi = ctx.app;
+
+  // Monaco spawns its language-service workers itself; this is the only hook it
+  // gives for saying where the scripts live. They're same-origin (the host's
+  // extension file route) and built as ES modules, so no blob/importScripts
+  // shim is needed.
+  (self as unknown as { MonacoEnvironment?: unknown }).MonacoEnvironment = {
+    getWorker(_workerId: string, label: string) {
+      const name = WORKER_FOR[label] ?? "editor";
+      return new Worker(ctx.assetUrl(`dist/workers/${name}.worker.js`), { type: "module" });
+    },
+  };
+
+  // Re-tokenizes and recolors every open editor in place; a no-op until the
+  // first editor tab has actually loaded Monaco.
+  unsubscribeTheme = ctx.app.onDidChangeColorTheme(() => refreshTheme(ctx.app));
+
   const extensions = parseExtensions(ctx.settings.get("textEditor.extensions"));
   const openOnClick = ctx.settings.get("textEditor.openOnClick") === true;
   ctx.registerFileViewer({
@@ -377,7 +297,15 @@ export function activate(ctx: ExtensionContext): void {
 }
 
 export function deactivate(): void {
+  unsubscribeTheme?.();
+  unsubscribeTheme = null;
   removeStylesheet?.();
   removeStylesheet = null;
-  themeApi = null;
+  disposeAllFiles();
+  unloadMonaco();
+  delete (self as unknown as { MonacoEnvironment?: unknown }).MonacoEnvironment;
+  hostAssetUrl = null;
+  hostThemeApi = null;
 }
+
+export type { TokenColorRule };

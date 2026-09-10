@@ -8,15 +8,15 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 |---|---|---|---|
 | Claude Usage & Auto-Retry | a CLAUDE USAGE panel (token burn per 5-hour block, from local transcripts) plus auto-continue after a usage-limit reset (or ask first) | first-party (tmux-server) | MIT |
 | Agent Monitor | classifies every tmux pane running an agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row | first-party (tmux-server) | MIT |
-| Text Editor | CodeMirror-based editor tab with syntax highlighting and save-back to disk, for quick edits without a round-trip through nvim | first-party (tmux-server) | MIT |
+| Text Editor | Monaco-based editor tab (the VS Code editor, lazy-loaded) with real TextMate syntax highlighting that matches VS Code/code-server, TS/JS/JSON/CSS/HTML IntelliSense, and save-back to disk | first-party (tmux-server) | MIT |
 | GitHub | GITHUB sidebar tab: open PRs/issues for the active repo, with "Start work" creating a worktree session (optionally priming an agent) | first-party (tmux-server) | MIT |
 | AI Command Search | natural language → shell command via a local AI CLI (Claude Code / Codex / Gemini / custom) | first-party (tmux-server) | MIT |
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
 | Full Keyboard | on-screen keyboard | first-party (tmux-server) | MIT |
 | One-Hand Operation | bottom gesture bar (swipe, double tap, long press) | first-party (tmux-server) | MIT |
 | GUI Apps | run Linux GUI apps on the server, viewed/controlled in the browser via xpra (adaptive HTML5 remote display) | first-party (tmux-server) | MIT |
-| Dark Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `dark_modern.json` include chain | MIT |
-| Light Modern | color theme | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `light_modern.json` include chain | MIT |
+| Dark Modern | color theme (with full `tokenColors`) | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `dark_modern.json` include chain | MIT |
+| Light Modern | color theme (with full `tokenColors`) | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `light_modern.json` include chain | MIT |
 | One Dark Pro | color theme (5 variants) | [Binaryify/OneDark-Pro](https://github.com/Binaryify/OneDark-Pro) | MIT |
 | VSCode Icons | file icon theme | [vscode-icons/vscode-icons](https://github.com/vscode-icons/vscode-icons) | MIT |
 | Popular Monospace Fonts | terminal fonts (4 groups) | Fira Code, JetBrains Mono, Cascadia Code, Source Code Pro — via [Fontsource](https://fontsource.org/) | OFL-1.1 |

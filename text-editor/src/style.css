@@ -19,14 +19,19 @@
   color: var(--error, #f48771);
 }
 
-.text-editor-cm {
+.text-editor-monaco {
   flex: 1;
   min-height: 0;
+  position: relative;
   overflow: hidden;
 }
 
-.text-editor-cm .cm-editor {
-  height: 100%;
+/* Monaco sets its own inline width/height from the container's measured box;
+   taking it out of flow keeps that measurement from feeding back into the
+   container's own height (the classic "editor grows every layout" loop). */
+.text-editor-monaco .monaco-editor {
+  position: absolute;
+  inset: 0;
 }
 
 .text-editor-dirty-dot {
@@ -38,6 +43,5 @@
   margin-right: 6px;
 }
 
-/* Syntax highlighting colors are set inline per token by tmHighlight.ts,
-   resolved from the active theme's real tokenColors via a Shiki TextMate
-   tokenizer — no CSS classes involved. */
+/* Editor colors come from the Monaco theme built in monacoTheme.ts out of the
+   active host theme's own colors/tokenColors — not from this stylesheet. */
