@@ -179,6 +179,12 @@ interface UsageResponse {
   blocks: UsageBlock[];
   resetsAt5h: number | null;
   resetsAtWeekly: number | null;
+  // From Claude Code's own rate-limit state file — the only figures here
+  // that aren't reconstructed from local transcripts. null when the window
+  // has already rolled over (its old percentage would describe a window that
+  // no longer exists).
+  fiveHourPct: number | null;
+  sevenDayPct: number | null;
 }
 
 const USAGE_POLL_MS = 30_000;
@@ -216,6 +222,104 @@ function burnRate(b: UsageBlock): number | null {
   const spanMin = (b.lastAt - b.firstAt) / 60_000;
   if (spanMin < 0.5) return null;
   return blockTotalTokens(b) / spanMin;
+}
+
+// Claude's asterisk mark, inline so it inherits currentColor and the bar's
+// own icon metric — a codicon would be someone else's glyph.
+function ClaudeMark() {
+  return (
+    <svg className="autoretry-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path
+        fill="currentColor"
+        d="M12 2.6c.5 0 .9.4.9.9v5.2l3.7-3.7a.9.9 0 0 1 1.3 1.3l-3.7 3.7h5.2a.9.9 0 0 1 0 1.8h-5.2l3.7 3.7a.9.9 0 0 1-1.3 1.3l-3.7-3.7v5.2a.9.9 0 0 1-1.8 0v-5.2l-3.7 3.7a.9.9 0 0 1-1.3-1.3l3.7-3.7H4.6a.9.9 0 0 1 0-1.8h5.2L6.1 6.3a.9.9 0 0 1 1.3-1.3l3.7 3.7V3.5c0-.5.4-.9.9-.9Z"
+      />
+    </svg>
+  );
+}
+
+// "4h 38m", "2d 21h" — how long the window has left, at the coarsest two
+// units that still say something useful.
+function formatRemaining(untilMs: number): string {
+  const total = Math.max(0, untilMs - Date.now());
+  const minutes = Math.floor(total / 60_000);
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes % 60}m`;
+  return `${minutes}m`;
+}
+
+// One window's readout: a small meter, the percentage, and the time left.
+function UsageMeter({ label, pct, resetsAt }: { label: string; pct: number; resetsAt: number | null }) {
+  return (
+    <span
+      className="autoretry-status-meter"
+      title={`${label}: ${pct}% used${resetsAt ? `, resets in ${formatRemaining(resetsAt)}` : ""}`}
+    >
+      <span className="autoretry-status-bar">
+        {/* Filled proportionally; the class carries the warning colour past
+            the thresholds where the number starts to matter. */}
+        <span
+          className={`autoretry-status-bar-fill${pct >= 90 ? " critical" : pct >= 70 ? " warn" : ""}`}
+          style={{ width: `${pct}%` }}
+        />
+      </span>
+      <span className="autoretry-status-text">
+        {pct}%
+        <span className="full-only"> used{resetsAt ? ` ${formatRemaining(resetsAt)}` : ""}</span>
+      </span>
+    </span>
+  );
+}
+
+interface StatusItemContext {
+  openPopover(anchor: DOMRect, content: ReturnType<typeof UsagePanel>): void;
+  closePopover(): void;
+}
+
+// The status-bar readout: the 5-hour and weekly limits at a glance, with the
+// full usage panel one click away. Percentages come from Claude Code's own
+// rate-limit file, so this shows nothing until that file exists — a token
+// count would be a poor substitute, since it can't say how close to a limit
+// you are.
+function UsageStatusItem({ context }: { context: StatusItemContext }) {
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const poll = async () => {
+      const data = await fetchUsage();
+      if (!cancelled && data) setUsage(data);
+    };
+    void poll();
+    const id = setInterval(poll, USAGE_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  const fiveHour = usage?.fiveHourPct ?? null;
+  const weekly = usage?.sevenDayPct ?? null;
+  if (fiveHour === null && weekly === null) return null;
+
+  return (
+    <button
+      className="status-bar-item autoretry-status-item"
+      data-menu-trigger="true"
+      aria-haspopup="dialog"
+      title="Claude usage — click for the full breakdown"
+      onClick={(e) => context.openPopover(e.currentTarget.getBoundingClientRect(), <UsagePanel />)}
+    >
+      <ClaudeMark />
+      {fiveHour !== null && (
+        <UsageMeter label="5-hour limit" pct={fiveHour} resetsAt={usage?.resetsAt5h ?? null} />
+      )}
+      {weekly !== null && (
+        <UsageMeter label="Weekly limit" pct={weekly} resetsAt={usage?.resetsAtWeekly ?? null} />
+      )}
+    </button>
+  );
 }
 
 function UsagePanel() {
@@ -352,6 +456,12 @@ interface ExtensionContext {
     id: string;
     component: (props: { context: AppOverlayContext }) => ReturnType<typeof LimitToasts>;
   }): void;
+  registerStatusBarItem(item: {
+    id: string;
+    placement?: "left" | "right";
+    order?: number;
+    component: (props: { context: StatusItemContext }) => ReturnType<typeof UsageStatusItem>;
+  }): void;
   registerSidebarPanel(panel: {
     id: string;
     title: string;
@@ -369,7 +479,9 @@ export function activate(ctx: ExtensionContext): void {
   appApi = ctx.app;
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
   ctx.registerAppOverlay({ id: "limit-toasts", component: LimitToasts });
-  ctx.registerSidebarPanel({ id: "usage", title: "Claude Usage", icon: "graph-line", location: "run", component: UsagePanel });
+  // No sidebar panel any more — the status-bar item's popover renders this
+  // same panel, which is the whole surface now.
+  ctx.registerStatusBarItem({ id: "usage", placement: "left", component: UsageStatusItem });
 }
 
 export function deactivate(): void {

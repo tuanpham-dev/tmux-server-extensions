@@ -121,6 +121,35 @@ async function readRateLimitState(kind) {
   return null;
 }
 
+// The percentages Claude Code itself records in the same state file — the
+// only non-estimated numbers available here (everything else in /usage is
+// reconstructed from local transcripts). A percentage is reported alongside
+// its own reset epoch, and only while that epoch is still in the future:
+// once a window has rolled over, its old percentage describes a window that
+// no longer exists.
+async function readRateLimitUsage() {
+  let parsed;
+  try {
+    parsed = JSON.parse(await readFile(RATE_LIMIT_STATE_PATH, "utf8"));
+  } catch {
+    return { fiveHourPct: null, sevenDayPct: null };
+  }
+  if (typeof parsed !== "object" || parsed === null) {
+    return { fiveHourPct: null, sevenDayPct: null };
+  }
+  const now = Date.now();
+  const pct = (value, resetsAt, horizonMs) => {
+    if (typeof value !== "number" || typeof resetsAt !== "number") return null;
+    const epochMs = resetsAt * 1000;
+    if (epochMs <= now || epochMs - now > horizonMs) return null;
+    return Math.max(0, Math.min(100, value));
+  };
+  return {
+    fiveHourPct: pct(parsed.five_hour_pct, parsed.resets_at, FIVE_HOUR_HORIZON_MS),
+    sevenDayPct: pct(parsed.seven_day_pct, parsed.seven_day_resets_at, SEVEN_DAY_HORIZON_MS),
+  };
+}
+
 const MONTHS = {
   jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
   jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
@@ -532,7 +561,8 @@ export function activate({ router, getSettings, log }) {
       const resetsAtWeekly = await readRateLimitState("weekly");
       const current = blocks.find((b) => b.isCurrent);
       if (current && typeof resetsAt5h === "number" && resetsAt5h > now) current.end = resetsAt5h;
-      res.json({ blocks, resetsAt5h, resetsAtWeekly });
+      const { fiveHourPct, sevenDayPct } = await readRateLimitUsage();
+      res.json({ blocks, resetsAt5h, resetsAtWeekly, fiveHourPct, sevenDayPct });
     } catch (err) {
       res.status(500).json({ error: err.message });
     }

@@ -119,3 +119,52 @@
   font-size: 11px;
   color: var(--fg-inactive, #999);
 }
+
+/* ---- Status-bar readout ---- */
+
+/* Sits in the bar's left group: the 5-hour and weekly limits as small
+   meters. Inherits .status-bar-item's height and hover from the host. */
+.autoretry-status-item {
+  gap: 8px;
+}
+
+.autoretry-status-meter {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.autoretry-status-bar {
+  width: 34px;
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--list-hover-bg);
+}
+
+.autoretry-status-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--fg-inactive);
+}
+
+/* Past the point where the number starts to matter. */
+.autoretry-status-bar-fill.warn {
+  background: var(--status-idle-bg);
+}
+
+.autoretry-status-bar-fill.critical {
+  background: var(--error);
+}
+
+.autoretry-status-text {
+  white-space: nowrap;
+}
+
+/* Claude's mark, sized to the host bar's icon metric. */
+.autoretry-mark {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
