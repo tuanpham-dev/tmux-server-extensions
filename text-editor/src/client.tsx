@@ -31,7 +31,14 @@ import {
 import DiffEditorView from "./DiffEditorView";
 import MergeView from "./MergeView";
 import { clearHost, hostAssetUrl, hostCanPreview, hostCloseViewerTab, hostOpenPreview, hostThemeApi, setHost } from "./host";
-import { clearSettingsApi, minimapEnabled, onSettingsChange, setSettingsApi, vimEnabled } from "./settings";
+import {
+  clearSettingsApi,
+  lineNumbersOption,
+  minimapEnabled,
+  onSettingsChange,
+  setSettingsApi,
+  vimEnabled,
+} from "./settings";
 import { useVimMode } from "./vim";
 
 const MAX_BYTES = 2 * 1024 * 1024;
@@ -187,6 +194,7 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
           fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font").trim() || "monospace",
           fontSize: fontSizeRef.current ?? DEFAULT_FONT_SIZE,
           minimap: { enabled: minimapEnabled() },
+          lineNumbers: lineNumbersOption(),
           renderWhitespace: "selection",
         });
         editorRef.current = editor;
@@ -241,12 +249,17 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
     if (active) editorRef.current?.layout();
   }, [active]);
 
-  // Settings → Text Editor → Minimap applies to open tabs immediately, the
-  // same way a theme change does.
+  // Settings → Text Editor applies to open tabs immediately, the same way a
+  // theme change does. Line numbers are re-read here rather than in the vim
+  // effect below because "auto" depends on the vim setting, so toggling vim
+  // has to move them too.
   useEffect(
     () =>
       onSettingsChange(() => {
-        editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled() } });
+        editorRef.current?.updateOptions({
+          minimap: { enabled: minimapEnabled() },
+          lineNumbers: lineNumbersOption(),
+        });
         setVimOn(vimEnabled());
       }),
     [],

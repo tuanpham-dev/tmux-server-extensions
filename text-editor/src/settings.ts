@@ -5,6 +5,7 @@
 // once at activation. `onDidChange` fires for edits made in Settings or on
 // another device, so an open editor re-applies without a reload.
 export type MinimapMode = "auto" | "on" | "off";
+export type LineNumbersMode = "auto" | "on" | "relative" | "off";
 
 interface SettingsApi {
   get(key: string): unknown;
@@ -38,6 +39,26 @@ export function onSettingsChange(cb: () => void): () => void {
 /** Whether the editor should run vim keybindings. */
 export function vimEnabled(): boolean {
   return api?.get("textEditor.vim") === true;
+}
+
+export function lineNumbersMode(): LineNumbersMode {
+  const raw = api?.get("textEditor.lineNumbers");
+  return raw === "on" || raw === "relative" || raw === "off" ? raw : "auto";
+}
+
+/**
+ * The `lineNumbers` value to hand Monaco. "auto" follows vim: relative numbers
+ * are what make vim's counted motions (`5j`, `d3k`) readable, and they are
+ * noise without the modal keys to use them, so the default tracks the vim
+ * setting rather than forcing a second toggle.
+ *
+ * Monaco's "relative" is really vim's `number relativenumber` hybrid — the
+ * cursor's own line shows its absolute number, every other line its distance.
+ */
+export function lineNumbersOption(): "on" | "relative" | "off" {
+  const mode = lineNumbersMode();
+  if (mode === "auto") return vimEnabled() ? "relative" : "on";
+  return mode;
 }
 
 export function minimapMode(): MinimapMode {

@@ -20,7 +20,7 @@ import { acquireFile, isDirty, markSaved, type FileEntry } from "./models";
 import { getMergeRequest, type MergeRequest } from "./requests";
 import { findConflicts, resolvedLines, type ConflictBlock, type ResolutionChoice } from "./conflictMarkers";
 import { hostAssetUrl, hostCloseViewerTab, hostOpenDiff, hostThemeApi } from "./host";
-import { onSettingsChange, vimEnabled } from "./settings";
+import { lineNumbersOption, onSettingsChange, vimEnabled } from "./settings";
 import { useVimMode } from "./vim";
 
 const DEFAULT_FONT_SIZE = 13;
@@ -129,6 +129,7 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
           fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font").trim() || "monospace",
           fontSize: fontSizeRef.current ?? DEFAULT_FONT_SIZE,
           minimap: { enabled: false },
+          lineNumbers: lineNumbersOption(),
           // The lenses are the point of this view; without this Monaco hides
           // them behind the "show more" affordance on narrow panes.
           codeLens: true,
@@ -179,7 +180,14 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
     if (active) editorRef.current?.layout();
   }, [active]);
 
-  useEffect(() => onSettingsChange(() => setVimOn(vimEnabled())), []);
+  useEffect(
+    () =>
+      onSettingsChange(() => {
+        editorRef.current?.updateOptions({ lineNumbers: lineNumbersOption() });
+        setVimOn(vimEnabled());
+      }),
+    [],
+  );
 
   useVimMode(
     editorRef.current,

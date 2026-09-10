@@ -2,7 +2,7 @@
   "name": "text-editor",
   "private": true,
   "publisher": "tmux-server",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "displayName": "Text Editor",
   "description": "A Monaco-based editor tab (the VS Code editor) with syntax highlighting that follows the active theme, IntelliSense for TypeScript/JavaScript/JSON/CSS/HTML, and save-back to disk, for quick edits without a round-trip through nvim.",
   "icon": "./icon.svg",
@@ -40,6 +40,23 @@
           ],
           "default": "auto",
           "description": "Whether the editor draws the minimap — the code overview down the right edge. Auto shows it on desktop and hides it on phones and tablets, where it only eats width. Diffs and merge conflicts never show one."
+        },
+        "textEditor.lineNumbers": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "on",
+            "relative",
+            "off"
+          ],
+          "enumItemLabels": [
+            "Auto (relative when vim is on)",
+            "Absolute",
+            "Relative",
+            "Hidden"
+          ],
+          "default": "auto",
+          "description": "How the editor numbers its lines. Relative counts the distance from the cursor, with the cursor's own line showing its absolute number \u2014 what makes vim's counted motions (`5j`, `d3k`) readable. Auto uses relative while vim keybindings are on and absolute otherwise. Applies to the editor and the merge view; a diff always numbers both sides absolutely."
         },
         "textEditor.vim": {
           "type": "boolean",

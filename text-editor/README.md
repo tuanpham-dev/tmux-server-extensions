@@ -170,6 +170,12 @@ A status line appears under the editor showing the current mode, the `:` prompt,
 search input. Without it there would be nowhere to type an Ex command, so it is part of the
 feature rather than decoration.
 
+Line numbers turn relative with it. `textEditor.lineNumbers` defaults to **Auto**, which
+means relative while vim is on and absolute otherwise — counted motions like `5j` and `d3k`
+are only readable when the gutter does the counting for you, and are noise without the modal
+keys to spend them on. Monaco's relative mode is vim's `number relativenumber` hybrid: the
+cursor's own line keeps its absolute number. Set the key explicitly to pin it either way.
+
 Four Ex commands are wired to what a "buffer" means here, which is a tab:
 
 | Command | Does |
@@ -233,6 +239,7 @@ extension's. What it does own is how the editor looks:
 | Key | Default | Description |
 |---|---|---|
 | `textEditor.minimap` | `auto` | Whether to draw the minimap, the code overview down the right edge. **Auto** shows it on desktop and hides it on phones and tablets, where it only eats width; **Always show** and **Always hide** override that. Applies to open tabs immediately. Diffs and merge conflicts never show one. |
+| `textEditor.lineNumbers` | `auto` | How lines are numbered. **Auto** follows the vim setting — relative when it is on, absolute when it is off; **Absolute**, **Relative** and **Hidden** pin it. Relative counts distance from the cursor, whose own line still shows its absolute number. Applies to open tabs immediately, and to the merge view; a diff numbers both sides absolutely regardless. |
 | `textEditor.vim` | `false` | Vim keybindings in the editor, the merge view, and a diff's editable side. See [Vim mode](#vim-mode). Applies to open tabs immediately. |
 
 Files over 2MB, or files that look binary, show a refusal message instead of loading —
