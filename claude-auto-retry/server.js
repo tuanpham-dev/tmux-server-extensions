@@ -142,7 +142,10 @@ async function readRateLimitUsage() {
     if (typeof value !== "number" || typeof resetsAt !== "number") return null;
     const epochMs = resetsAt * 1000;
     if (epochMs <= now || epochMs - now > horizonMs) return null;
-    return Math.max(0, Math.min(100, value));
+    // Whole percents only: the raw field carries float noise (a real reading
+    // of 55 arrives as 55.000000000001), and a status-bar readout has no use
+    // for a fraction of a percent anyway.
+    return Math.round(Math.max(0, Math.min(100, value)));
   };
   return {
     fiveHourPct: pct(parsed.five_hour_pct, parsed.resets_at, FIVE_HOUR_HORIZON_MS),
