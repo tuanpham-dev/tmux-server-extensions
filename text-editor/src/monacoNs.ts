@@ -10,3 +10,6 @@ export type TextModel = monacoNs.editor.ITextModel;
 export type StandaloneEditor = monacoNs.editor.IStandaloneCodeEditor;
 export type TokenizerState = monacoNs.languages.IState;
 export type StandaloneDiffEditor = monacoNs.editor.IStandaloneDiffEditor;
+// The common base of both the standalone editor and the two panes inside a
+// diff editor. Vim attaches to any of them, so it talks in this type.
+export type CodeEditor = monacoNs.editor.ICodeEditor;

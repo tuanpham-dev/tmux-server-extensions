@@ -74,3 +74,27 @@
 .text-editor-merge-base {
   background: var(--vscode-merge-commonContentBackground);
 }
+
+/* monaco-vim's status line: the current mode, the ":" prompt, and search
+   input. Sits under the editor and must never grow it — the editor container
+   keeps flex: 1, so this takes only the height of its own text. */
+.text-editor-vim-status {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-top: 1px solid var(--border, #333);
+  font-family: var(--terminal-font, monospace);
+  font-size: 12px;
+  color: var(--fg-inactive, #999);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* monaco-vim renders its ":" / "/" prompt as an input inside that node. */
+.text-editor-vim-status input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--fg, #ddd);
+  font: inherit;
+  width: 60%;
+}

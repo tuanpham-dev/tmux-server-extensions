@@ -20,6 +20,7 @@
     "esbuild": "^0.23.0",
     "ghostty-web": "0.4.0",
     "monaco-editor": "^0.56.0",
+    "monaco-vim": "^0.4.4",
     "typescript": "^5.9.3"
   },
   "allowScripts": {

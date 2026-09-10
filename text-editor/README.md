@@ -156,6 +156,57 @@ The Source Control panel keeps its own diff and conflict views as a secondary ac
 Git Diff View", "Resolve in Git Merge View"), and falls back to them whenever a file can't be
 shown here, such as a binary one.
 
+## Vim mode
+
+**Settings → Text Editor → Vim keybindings** turns the editor modal. It is off by default,
+and toggling it applies to tabs that are already open — no reload.
+
+It covers three surfaces: the file editor, the merge-conflict view, and the editable side of
+a diff. A diff's left pane is read-only, so it gets no vim layer at all; clicking into it and
+pressing `i` types nothing and changes no mode. Diffs of two git revisions are read-only on
+both sides and stay unmodal.
+
+A status line appears under the editor showing the current mode, the `:` prompt, and the
+search input. Without it there would be nowhere to type an Ex command, so it is part of the
+feature rather than decoration.
+
+Four Ex commands are wired to what a "buffer" means here, which is a tab:
+
+| Command | Does |
+|---|---|
+| `:w` | Saves the file, the same as Ctrl/Cmd+S. |
+| `:q` | Closes the tab. Refuses on unsaved changes with vim's own `E37: No write since last change` — closing a tab has no confirmation of its own, so without the check this would be a silent way to lose edits. |
+| `:q!` | Closes the tab and discards unsaved changes. |
+| `:wq`, `:x` | Saves, then closes. |
+
+Everything else is [monaco-vim](https://github.com/brijeshb42/monaco-vim), which is
+CodeMirror's vim engine adapted to Monaco: motions, operators, registers, macros, marks,
+counts, visual mode, `/` search and `:s` substitution all behave as they do there.
+
+### Chords the app keeps
+
+A handful of chords are handled by tmux-server before the editor ever sees the key, so their
+vim meanings are unavailable while the editor has focus:
+
+| Chord | App action | Vim meaning you lose |
+|---|---|---|
+| `Ctrl+P` | Toggle Quick Switcher | previous-line motion |
+| `Ctrl+W` | Close Tab | the window prefix |
+| `Ctrl+Shift+P` | Show Command Palette | — |
+| `Ctrl+1`–`Ctrl+8` | Focus editor group N | — |
+| `Alt+1`–`Alt+9` | Focus tab N | — |
+| `Ctrl+\` | Split Editor Right | — |
+| `` Ctrl+` `` | Toggle Terminal Panel | — |
+| `Ctrl+,` | Open Settings | — |
+
+All of these are rebindable in **Settings → Keyboard Shortcuts**, so if you want `Ctrl+W`
+back for window commands, move the app's binding elsewhere.
+
+Everything else reaches vim, including the chords a vim user misses most: `Ctrl+R` redo,
+`Ctrl+V` visual block, `Ctrl+O`/`Ctrl+I` jumplist and `Ctrl+A`/`Ctrl+X` increment. One chord
+changes hands the other way: `Ctrl+F` normally opens Monaco's find widget, and with vim on it
+becomes vim's page-forward instead. Search with `/` there.
+
 ## Language services
 
 Four Monaco language-service workers ship: **TypeScript/JavaScript**, **JSON**, **CSS**, and
@@ -182,6 +233,7 @@ extension's. What it does own is how the editor looks:
 | Key | Default | Description |
 |---|---|---|
 | `textEditor.minimap` | `auto` | Whether to draw the minimap, the code overview down the right edge. **Auto** shows it on desktop and hides it on phones and tablets, where it only eats width; **Always show** and **Always hide** override that. Applies to open tabs immediately. Diffs and merge conflicts never show one. |
+| `textEditor.vim` | `false` | Vim keybindings in the editor, the merge view, and a diff's editable side. See [Vim mode](#vim-mode). Applies to open tabs immediately. |
 
 Files over 2MB, or files that look binary, show a refusal message instead of loading —
 open those in another viewer.

@@ -31,12 +31,41 @@ import { fileURLToPath } from "node:url";
 const scriptsDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.dirname(scriptsDir);
 
+// monaco-vim imports Monaco through the pre-0.56 "monaco-editor/esm/vs/..."
+// specifier style, which that version's `exports` map no longer resolves (the
+// same breakage the worker entries hit). Pointing each at its real file fixes
+// resolution and — crucially — keeps them the *same module instances* the rest
+// of the chunk already imports through "monaco-editor", so esbuild dedupes
+// instead of bundling a second ~5MB Monaco that vim would then attach to
+// instead of the real editor.
+const monacoDir = path.join(repoRoot, "node_modules/monaco-editor/esm/vs");
+const monacoInternalAliases = {
+  "monaco-editor/esm/vs/editor/editor.api": path.join(monacoDir, "editor/editor.api.js"),
+  "monaco-editor/esm/vs/editor/common/commands/shiftCommand": path.join(
+    monacoDir,
+    "editor/common/commands/shiftCommand.js",
+  ),
+};
+
+// A missing target would silently fall back to bundling a duplicate Monaco, so
+// stop the build instead — a failure here is cheap to read, that one is not.
+for (const [specifier, target] of Object.entries(monacoInternalAliases)) {
+  if (!existsSync(target)) {
+    throw new Error(
+      `Alias target for "${specifier}" does not exist: ${target}\n` +
+        "monaco-editor probably moved this internal path. Update monacoInternalAliases in scripts/build.mjs — " +
+        "without the alias, esbuild bundles a second copy of Monaco and monaco-vim attaches to the wrong instance.",
+    );
+  }
+}
+
 const shims = {
   react: path.join(scriptsDir, "shims/react.mjs"),
   "react-dom": path.join(scriptsDir, "shims/react-dom.mjs"),
   "react-dom/client": path.join(scriptsDir, "shims/react-dom-client.mjs"),
   "react/jsx-runtime": path.join(scriptsDir, "shims/react-jsx-runtime.mjs"),
   "@tmux-server/engine-support": path.join(scriptsDir, "shims/engine-support.mjs"),
+  ...monacoInternalAliases,
 };
 
 // Shared by the client entry, chunks, and workers so a module behaves

@@ -30,8 +30,9 @@ import {
 } from "./requests";
 import DiffEditorView from "./DiffEditorView";
 import MergeView from "./MergeView";
-import { clearHost, hostAssetUrl, hostCanPreview, hostOpenPreview, hostThemeApi, setHost } from "./host";
-import { clearSettingsApi, minimapEnabled, onSettingsChange, setSettingsApi } from "./settings";
+import { clearHost, hostAssetUrl, hostCanPreview, hostCloseViewerTab, hostOpenPreview, hostThemeApi, setHost } from "./host";
+import { clearSettingsApi, minimapEnabled, onSettingsChange, setSettingsApi, vimEnabled } from "./settings";
+import { useVimMode } from "./vim";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_FONT_SIZE = 13;
@@ -113,14 +114,27 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirtyState] = useState(false);
+  // Bumped when a new editor instance is created, so useVimMode re-attaches —
+  // a ref's .current changing is invisible to React's dependency check.
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  // Re-render when the setting flips, so the vim status node appears or
+  // disappears. It is held in state rather than a ref because a ref read
+  // during render is still null on the render that creates the node, and
+  // nothing would re-render afterwards to hand it to useVimMode.
+  const [vimOn, setVimOn] = useState(() => vimEnabled());
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
 
   // Whether some other extension can render this file — Markdown, JSON/YAML,
   // CSV. In a tmux pane there was nowhere to put this; a tab has a toolbar.
   const canPreview = hostCanPreview?.(filePath) ?? false;
 
-  const save = useCallback(async () => {
+  // Resolves true when the file is on disk. The result is what tells vim's
+  // `:wq` whether it may close the tab: a failed save is reported in the
+  // toolbar rather than thrown, so without this the tab would close on a
+  // failure and take the edits with it.
+  const save = useCallback(async (): Promise<boolean> => {
     const entry = entryRef.current;
-    if (!entry?.model) return;
+    if (!entry?.model) return false;
     const content = entry.model.getValue();
     setSaving(true);
     setSaveError(null);
@@ -129,8 +143,10 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
       // Shared baseline: a save in either split pane clears the dirty flag in
       // both, since they are the same document.
       markSaved(entry, content);
+      return true;
     } catch (err) {
       setSaveError(messageOf(err));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -174,6 +190,7 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
           renderWhitespace: "selection",
         });
         editorRef.current = editor;
+        setEditorEpoch((n) => n + 1);
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current());
 
         // A "file:line" open (terminal ctrl+click, a quick-switcher jump)
@@ -230,8 +247,20 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
     () =>
       onSettingsChange(() => {
         editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled() } });
+        setVimOn(vimEnabled());
       }),
     [],
+  );
+
+  useVimMode(
+    editorRef.current,
+    vimStatusNode,
+    {
+      save: () => save(),
+      close: () => hostCloseViewerTab?.("textEditor", filePath),
+      isDirty: () => dirty,
+    },
+    editorEpoch,
   );
 
   // A re-open of this same tab (see reloadKey) may carry a fresh line to jump
@@ -249,6 +278,7 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, r
       {error && <div className="text-editor-status text-editor-error">{error}</div>}
       {!error && loading && <div className="text-editor-status">Loading editor…</div>}
       {!error && <div ref={containerRef} className="text-editor-monaco" />}
+      {!error && vimOn && <div ref={setVimStatusNode} className="text-editor-vim-status" />}
       {active &&
         toolbarTarget &&
         createPortal(
@@ -308,6 +338,7 @@ interface ExtensionContext {
     openViewerTab?(viewerId: string, path: string, opts?: { title?: string }): void;
     canPreview?(path: string): boolean;
     openPreview?(path: string): void;
+    closeViewerTab?(viewerId: string, path: string): void;
     openDiff?(req: DiffRequest): Promise<boolean>;
   };
 }
@@ -339,6 +370,7 @@ export function activate(ctx: ExtensionContext): void {
     openDiff: ctx.app.openDiff,
     canPreview: ctx.app.canPreview,
     openPreview: ctx.app.openPreview,
+    closeViewerTab: ctx.app.closeViewerTab,
   });
 
   // Monaco spawns its language-service workers itself; this is the only hook it

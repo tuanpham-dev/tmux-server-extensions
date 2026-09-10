@@ -13,6 +13,11 @@ import { createHighlighterCore, type HighlighterCore, type LanguageRegistration 
 import { createJavaScriptRegexEngine } from "@shikijs/engine-javascript";
 import { applyHostTheme as applyShikiTheme, type TokenColorRule } from "../shikiTheme";
 import { registerExtraLanguages } from "../languages";
+// Vim keybindings ride along in this chunk rather than one of their own: a
+// separate chunk would re-bundle everything monaco-vim imports from Monaco,
+// giving vim a second editor instance to attach to. See scripts/build.mjs for
+// the aliases that keep those imports pointing at this chunk's own Monaco.
+import { initVimMode, VimMode } from "monaco-vim";
 
 import tsxGrammar from "@shikijs/langs/tsx";
 import javascriptGrammar from "@shikijs/langs/javascript";
@@ -191,4 +196,4 @@ export async function applyHostTheme(colors: Record<string, string>, tokenColors
   await applyShikiTheme(monaco, highlighter, colors, tokenColors);
 }
 
-export { monaco };
+export { monaco, initVimMode, VimMode };

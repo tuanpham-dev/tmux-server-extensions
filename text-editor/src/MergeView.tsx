@@ -19,7 +19,9 @@ import type { MonacoNs, StandaloneEditor, TextModel } from "./monacoNs";
 import { acquireFile, isDirty, markSaved, type FileEntry } from "./models";
 import { getMergeRequest, type MergeRequest } from "./requests";
 import { findConflicts, resolvedLines, type ConflictBlock, type ResolutionChoice } from "./conflictMarkers";
-import { hostAssetUrl, hostOpenDiff, hostThemeApi } from "./host";
+import { hostAssetUrl, hostCloseViewerTab, hostOpenDiff, hostThemeApi } from "./host";
+import { onSettingsChange, vimEnabled } from "./settings";
+import { useVimMode } from "./vim";
 
 const DEFAULT_FONT_SIZE = 13;
 // Re-scanning on every keystroke would rebuild decorations mid-word; this is
@@ -68,18 +70,27 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
   const [dirty, setDirtyState] = useState(false);
   const [remaining, setRemaining] = useState(0);
   const [resolving, setResolving] = useState(false);
+  // See TextEditorView for why the editor is counted and the status node held
+  // in state rather than read off a ref during render.
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  const [vimOn, setVimOn] = useState(() => vimEnabled());
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
 
-  const save = useCallback(async () => {
+  // Resolves true when the file is on disk — see TextEditorView's save for why
+  // vim's `:wq` needs the answer.
+  const save = useCallback(async (): Promise<boolean> => {
     const entry = entryRef.current;
-    if (!entry?.model) return;
+    if (!entry?.model) return false;
     const content = entry.model.getValue();
     setSaving(true);
     setSaveError(null);
     try {
       await saveFileText(entry.filePath, content);
       markSaved(entry, content);
+      return true;
     } catch (err) {
       setSaveError(messageOf(err));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -123,6 +134,7 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
           codeLens: true,
         });
         editorRef.current = editor;
+        setEditorEpoch((n) => n + 1);
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current());
 
         const disposers = wireConflictUi(monaco, editor, model, request, setRemaining);
@@ -167,6 +179,19 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
     if (active) editorRef.current?.layout();
   }, [active]);
 
+  useEffect(() => onSettingsChange(() => setVimOn(vimEnabled())), []);
+
+  useVimMode(
+    editorRef.current,
+    vimStatusNode,
+    {
+      save: () => save(),
+      close: () => hostCloseViewerTab?.("merge", filePath),
+      isDirty: () => dirty,
+    },
+    editorEpoch,
+  );
+
   const acceptAll = useCallback((choice: ResolutionChoice) => {
     const model = entryRef.current?.model;
     if (!model) return;
@@ -204,6 +229,7 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
         </div>
       )}
       {!error && <div ref={containerRef} className="text-editor-monaco" />}
+      {!error && vimOn && <div ref={setVimStatusNode} className="text-editor-vim-status" />}
       {active &&
         toolbarTarget &&
         createPortal(

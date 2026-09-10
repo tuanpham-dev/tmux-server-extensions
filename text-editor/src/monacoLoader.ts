@@ -20,9 +20,37 @@ export interface ThemeApi {
   getTokenColors(): TokenColorRule[];
 }
 
-interface MonacoChunk {
+// monaco-vim ships `any`-heavy declarations, so these are typed by what this
+// extension actually calls rather than by importing its types.
+export interface VimAdapter {
+  dispose(): void;
+}
+
+/**
+ * The second argument monaco-vim hands an Ex command: the parsed range and
+ * command name, plus `input` — the line exactly as typed, which is the only
+ * place a trailing `!` survives.
+ */
+export interface ExParams {
+  input?: string;
+  commandName?: string;
+  argString?: string;
+}
+
+/** The editor adapter monaco-vim passes to an Ex command, narrowed to what
+ * this extension calls. `openNotification` is the status bar's message slot —
+ * it clears itself after a few seconds. */
+export interface VimCm {
+  openNotification(text: string): void;
+}
+
+export type ExHandler = (cm: VimCm, params: ExParams) => void;
+
+export interface MonacoChunk {
   monaco: MonacoNs;
   applyHostTheme(colors: Record<string, string>, tokenColors: TokenColorRule[]): Promise<void>;
+  initVimMode(editor: unknown, statusNode: HTMLElement | null): VimAdapter;
+  VimMode: { Vim: { defineEx(name: string, short: string, handler: ExHandler): void } };
 }
 
 let loadPromise: Promise<MonacoNs> | null = null;
@@ -32,6 +60,11 @@ let removeStylesheet: (() => void) | null = null;
 /** The Monaco namespace if the chunk has finished loading, else null. */
 export function getLoadedMonaco(): MonacoNs | null {
   return loaded?.monaco ?? null;
+}
+
+/** The whole loaded chunk — for callers that need more than `monaco` (vim). */
+export function getLoadedChunk(): MonacoChunk | null {
+  return loaded;
 }
 
 /**

@@ -35,6 +35,11 @@ export function onSettingsChange(cb: () => void): () => void {
   return () => listeners.delete(cb);
 }
 
+/** Whether the editor should run vim keybindings. */
+export function vimEnabled(): boolean {
+  return api?.get("textEditor.vim") === true;
+}
+
 export function minimapMode(): MinimapMode {
   const raw = api?.get("textEditor.minimap");
   return raw === "on" || raw === "off" ? raw : "auto";

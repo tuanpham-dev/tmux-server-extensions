@@ -13,10 +13,12 @@ import { createPortal } from "react-dom";
 import Icon from "./Icon";
 import { saveFileText } from "./fileApi";
 import { loadMonaco } from "./monacoLoader";
-import type { StandaloneDiffEditor, TextModel } from "./monacoNs";
+import type { CodeEditor, StandaloneDiffEditor, TextModel } from "./monacoNs";
 import { languageFor } from "./models";
 import { getDiffRequest, type DiffRequest } from "./requests";
-import { hostAssetUrl, hostThemeApi } from "./host";
+import { hostAssetUrl, hostCloseViewerTab, hostThemeApi } from "./host";
+import { onSettingsChange, vimEnabled } from "./settings";
+import { useVimMode } from "./vim";
 
 const DEFAULT_FONT_SIZE = 13;
 
@@ -35,6 +37,9 @@ function messageOf(err: unknown): string {
 export default function DiffEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<StandaloneDiffEditor | null>(null);
+  // Only the modified pane gets vim, and only when it is editable; the original
+  // side is read-only, where a modal layer would just swallow keys.
+  const modifiedRef = useRef<CodeEditor | null>(null);
   const modelsRef = useRef<{ original: TextModel; modified: TextModel } | null>(null);
   const saveRef = useRef<() => void>(() => {});
   const fontSizeRef = useRef(fontSize);
@@ -59,10 +64,17 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
   // Side-by-side on a desktop pane, inline where there isn't room for two
   // columns — and a toolbar toggle either way, as VS Code has.
   const [sideBySide, setSideBySide] = useState(() => !matchMedia("(pointer: coarse) and (hover: none)").matches);
+  // See TextEditorView for why the editor is counted and the status node held
+  // in state rather than read off a ref during render.
+  const [editorEpoch, setEditorEpoch] = useState(0);
+  const [vimOn, setVimOn] = useState(() => vimEnabled());
+  const [vimStatusNode, setVimStatusNode] = useState<HTMLDivElement | null>(null);
 
-  const save = useCallback(async () => {
+  // Resolves true when the file is on disk — see TextEditorView's save for why
+  // vim's `:wq` needs the answer.
+  const save = useCallback(async (): Promise<boolean> => {
     const models = modelsRef.current;
-    if (!models || !editablePath) return;
+    if (!models || !editablePath) return false;
     const content = models.modified.getValue();
     setSaving(true);
     setSaveError(null);
@@ -73,8 +85,10 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
       // The saved text is the new baseline: further edits are dirty again,
       // but this exact content isn't.
       savedTextRef.current = content;
+      return true;
     } catch (err) {
       setSaveError(messageOf(err));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -123,6 +137,8 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
         editorRef.current = editor;
 
         if (request.modified.path) {
+          modifiedRef.current = editor.getModifiedEditor();
+          setEditorEpoch((n) => n + 1);
           editor.getModifiedEditor().addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current());
           const sub = modified.onDidChangeContent(() => {
             const isDirty = modified.getValue() !== savedTextRef.current;
@@ -145,6 +161,7 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
       teardown?.();
       editorRef.current?.dispose();
       editorRef.current = null;
+      modifiedRef.current = null;
       // The diff editor never owns models passed through setModel, so both are
       // this component's to dispose.
       modelsRef.current?.original.dispose();
@@ -166,6 +183,19 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
     if (active) editorRef.current?.layout();
   }, [active]);
 
+  useEffect(() => onSettingsChange(() => setVimOn(vimEnabled())), []);
+
+  useVimMode(
+    modifiedRef.current,
+    vimStatusNode,
+    {
+      save: () => save(),
+      close: () => hostCloseViewerTab?.("diff", filePath),
+      isDirty: () => dirty,
+    },
+    editorEpoch,
+  );
+
   const readOnlyNote = !editablePath ? request?.modified.readOnlyReason : undefined;
 
   return (
@@ -174,6 +204,7 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
       {!error && loading && <div className="text-editor-status">Loading editor…</div>}
       {!error && readOnlyNote && <div className="text-editor-status">{readOnlyNote}</div>}
       {!error && <div ref={containerRef} className="text-editor-monaco" />}
+      {!error && vimOn && editablePath && <div ref={setVimStatusNode} className="text-editor-vim-status" />}
       {active &&
         toolbarTarget &&
         createPortal(
