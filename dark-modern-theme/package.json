@@ -2,7 +2,7 @@
   "name": "dark-modern-theme",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "Dark Modern",
   "description": "VS Code's Dark Modern color theme (flattened from microsoft/vscode, MIT, see LICENSE.txt).",
   "icon": "./icon.svg",

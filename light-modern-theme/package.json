@@ -2,7 +2,7 @@
   "name": "light-modern-theme",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "Light Modern",
   "description": "VS Code's Light Modern color theme (flattened from microsoft/vscode, MIT, see LICENSE.txt).",
   "icon": "./icon.svg",
