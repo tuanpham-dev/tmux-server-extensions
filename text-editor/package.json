@@ -2,7 +2,7 @@
   "name": "text-editor",
   "private": true,
   "publisher": "tmux-server",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "displayName": "Text Editor",
   "description": "A Monaco-based editor tab (the VS Code editor) with syntax highlighting that follows the active theme, IntelliSense for TypeScript/JavaScript/JSON/CSS/HTML, and save-back to disk, for quick edits without a round-trip through nvim.",
   "icon": "./icon.svg",
@@ -11,18 +11,34 @@
     "monaco-editor": "^0.56.0"
   },
   "contributes": {
+    "editors": [
+      {
+        "id": "monaco",
+        "label": "Monaco (Text Editor)",
+        "capabilities": [
+          "file",
+          "diff",
+          "merge"
+        ]
+      }
+    ],
     "configuration": {
       "title": "Text Editor",
       "properties": {
-        "textEditor.extensions": {
+        "textEditor.minimap": {
           "type": "string",
-          "default": "ts,tsx,js,jsx,mjs,cjs,css,py,go,rs,sh,txt,toml",
-          "description": "Comma-separated file extensions (no dot) this editor opens for. Excludes json/yml/yaml, md/markdown, html/htm, and csv/tsv by default since those already have a dedicated bundled preview — add one back here if you'd rather edit it as plain text. Reached via the hover Preview icon, the \"Preview\" context-menu item, or Shift+Enter — unless \"Open this editor on a plain FILES click\" is on."
-        },
-        "textEditor.openOnClick": {
-          "type": "boolean",
-          "default": false,
-          "description": "Open this editor directly on a plain FILES-tree click instead of nvim, for the configured extensions. Takes effect after a page reload."
+          "enum": [
+            "auto",
+            "on",
+            "off"
+          ],
+          "enumItemLabels": [
+            "Auto (hidden on touch devices)",
+            "Always show",
+            "Always hide"
+          ],
+          "default": "auto",
+          "description": "Whether the editor draws the minimap — the code overview down the right edge. Auto shows it on desktop and hides it on phones and tablets, where it only eats width. Diffs and merge conflicts never show one."
         }
       }
     }

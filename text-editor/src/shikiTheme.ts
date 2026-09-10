@@ -165,6 +165,127 @@ function registerTokenProviders(monaco: MonacoNs, highlighter: HighlighterCore):
 // change registers under a fresh name (a theme registration is a small object).
 let themeSeq = 0;
 
+// Fallback colors for languages with no TextMate grammar in the bundle.
+//
+// The theme this module builds declares `inherit: false` and names its tokens
+// by resolved (color, style) pair, which is what makes TextMate output exact.
+// The cost is that anything tokenized by Monaco's *own* Monarch tokenizers —
+// every language in its set that has no grammar here — emits token names this
+// theme has never heard of, and renders in the plain default foreground.
+//
+// So the theme also carries a second, coarse rule set keyed by Monarch's token
+// vocabulary, derived from the same tokenColors. It is an approximation by
+// construction (Monarch has one `keyword` where TextMate distinguishes a dozen
+// scopes), but it is the difference between a Java file looking like code and
+// looking like a wall of grey.
+const VALID_FONT_STYLES = new Set(["italic", "bold", "underline", "strikethrough"]);
+
+interface FlatRule {
+  scope: string;
+  depth: number;
+  foreground?: string;
+  fontStyle?: string;
+}
+
+function normalizeFontStyle(fontStyle: string | undefined): string | undefined {
+  if (!fontStyle) return undefined;
+  const parts = fontStyle
+    .split(/\s+/)
+    .map((p) => p.toLowerCase())
+    .filter((p) => VALID_FONT_STYLES.has(p));
+  return parts.length ? parts.join(" ") : undefined;
+}
+
+// One entry per (scope, settings) pair, in the theme's own order — a
+// tokenColors rule may list several scopes, and each behaves independently.
+function flattenRules(tokenColors: TokenColorRule[]): FlatRule[] {
+  const flat: FlatRule[] = [];
+  for (const rule of tokenColors ?? []) {
+    const scopes = typeof rule.scope === "string" ? rule.scope.split(",") : (rule.scope ?? []);
+    const foreground = rule.settings?.foreground;
+    const fontStyle = normalizeFontStyle(rule.settings?.fontStyle);
+    if (!foreground && !fontStyle) continue;
+    for (const raw of scopes) {
+      const scope = raw.trim();
+      if (!scope) continue;
+      flat.push({
+        scope,
+        depth: scope.split(".").length,
+        ...(foreground && HEX_COLOR.test(foreground) ? { foreground } : {}),
+        ...(fontStyle ? { fontStyle } : {}),
+      });
+    }
+  }
+  return flat;
+}
+
+// TextMate precedence for one scope: a rule applies when its own scope is that
+// scope or an ancestor of it, the most specific wins, ties go to the later
+// rule, and foreground and fontStyle resolve independently — so a theme's
+// separate "comments are italic" rule adds italics to the comment color rather
+// than replacing it.
+function resolveScope(rules: FlatRule[], scope: string): { foreground?: string; fontStyle?: string } {
+  let foreground: string | undefined;
+  let fontStyle: string | undefined;
+  let fgDepth = -1;
+  let fsDepth = -1;
+  for (const rule of rules) {
+    if (scope !== rule.scope && !scope.startsWith(`${rule.scope}.`)) continue;
+    if (rule.foreground && rule.depth >= fgDepth) {
+      foreground = rule.foreground;
+      fgDepth = rule.depth;
+    }
+    if (rule.fontStyle && rule.depth >= fsDepth) {
+      fontStyle = rule.fontStyle;
+      fsDepth = rule.depth;
+    }
+  }
+  return { foreground, fontStyle };
+}
+
+const MONARCH_FALLBACK: Array<[string, string[]]> = [
+  ["comment", ["comment"]],
+  ["string", ["string"]],
+  ["string.regexp", ["regexp"]],
+  ["constant.character.escape", ["string.escape"]],
+  ["constant.numeric", ["number", "number.hex", "number.octal", "number.binary", "number.float"]],
+  ["constant.language", ["constant"]],
+  ["storage", ["keyword"]],
+  ["keyword", ["keyword"]],
+  ["keyword.operator", ["operator", "operators"]],
+  ["storage.type", ["type", "type.identifier"]],
+  ["support.class", ["type", "type.identifier"]],
+  ["support.type", ["type", "type.identifier"]],
+  ["entity.name.type", ["type", "type.identifier"]],
+  ["support.function", ["predefined"]],
+  ["entity.name.function", ["identifier.function"]],
+  ["variable", ["variable", "identifier"]],
+  ["variable.parameter", ["parameter"]],
+  ["entity.name.tag", ["tag"]],
+  ["entity.other.attribute-name", ["attribute.name"]],
+  ["support.type.property-name", ["attribute.name", "key"]],
+  ["meta.brace", ["delimiter"]],
+  ["punctuation", ["delimiter"]],
+  ["meta.annotation", ["annotation"]],
+  ["invalid", ["invalid"]],
+];
+
+// Inline-merge block colors. VS Code registers these as theme colors with
+// defaults that are identical in light and dark (read from code-server's own
+// build: current #40C8AE and incoming #40A6FF at 50% on the header line and
+// 20% on the block body, common ancestor #606060 at 40%/16%). A theme is free
+// to override any of them; almost none do, so they are always defined here
+// rather than left to resolve through the color registry — a custom theme
+// declares `inherit: false`, and an undefined color there renders as nothing.
+const MERGE_COLOR_DEFAULTS: Record<string, string> = {
+  "merge.currentHeaderBackground": "#40C8AE80",
+  "merge.currentContentBackground": "#40C8AE33",
+  "merge.incomingHeaderBackground": "#40A6FF80",
+  "merge.incomingContentBackground": "#40A6FF33",
+  "merge.commonHeaderBackground": "#60606066",
+  "merge.commonContentBackground": "#60606029",
+};
+
 export async function applyHostTheme(
   monaco: MonacoNs,
   highlighter: HighlighterCore,
@@ -180,6 +301,22 @@ export async function applyHostTheme(
   const { colorMap } = highlighter.setTheme(name);
 
   const rules: Array<{ token: string; foreground?: string; fontStyle?: string }> = [];
+
+  // Coarse rules first, so a synthetic (color, style) rule always wins for a
+  // span the TextMate tokenizer actually produced.
+  const flat = flattenRules(tokenColors);
+  for (const [scope, tokens] of MONARCH_FALLBACK) {
+    const { foreground, fontStyle } = resolveScope(flat, scope);
+    if (!foreground && !fontStyle) continue;
+    for (const token of tokens) {
+      rules.push({
+        token,
+        ...(foreground ? { foreground: foreground.replace("#", "") } : {}),
+        ...(fontStyle ? { fontStyle } : {}),
+      });
+    }
+  }
+
   for (let index = 0; index < colorMap.length; index++) {
     const color = colorMap[index];
     if (!color || !HEX_COLOR.test(color)) continue;
@@ -190,13 +327,15 @@ export async function applyHostTheme(
     }
   }
 
+  const colorsWithMerge = { ...MERGE_COLOR_DEFAULTS, ...safeColors };
+
   monaco.editor.defineTheme(name, {
     base: isLightBackground(safeColors["editor.background"]) ? "vs" : "vs-dark",
     // Every token name here is generated, so there is nothing for a base theme
     // to usefully contribute — and inheriting would let its rules win for spans
     // this theme deliberately leaves at the default foreground.
     inherit: false,
-    colors: safeColors,
+    colors: colorsWithMerge,
     rules,
   });
   monaco.editor.setTheme(name);

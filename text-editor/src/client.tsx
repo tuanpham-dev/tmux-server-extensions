@@ -20,6 +20,18 @@ import { loadMonaco, refreshTheme, unloadMonaco, type ThemeApi } from "./monacoL
 import type { StandaloneEditor } from "./monacoNs";
 import { acquireFile, disposeAllFiles, isDirty, markSaved, type FileEntry } from "./models";
 import type { TokenColorRule } from "./shikiTheme";
+import {
+  registerDiffRequest,
+  registerMergeRequest,
+  setFileRequest,
+  takeFileRequest,
+  type DiffRequest,
+  type MergeRequest,
+} from "./requests";
+import DiffEditorView from "./DiffEditorView";
+import MergeView from "./MergeView";
+import { clearHost, hostAssetUrl, hostCanPreview, hostOpenPreview, hostThemeApi, setHost } from "./host";
+import { clearSettingsApi, minimapEnabled, onSettingsChange, setSettingsApi } from "./settings";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 const DEFAULT_FONT_SIZE = 13;
@@ -78,9 +90,12 @@ interface Props {
   toolbarTarget?: HTMLDivElement | null;
   setDirty?: (dirty: boolean) => void;
   fontSize?: number;
+  // Bumped by the host each time an explicit open re-targets this already-open
+  // tab — how a second "file:line" jump into the same file arrives.
+  reloadKey?: number;
 }
 
-function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }: Props) {
+function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize, reloadKey }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<StandaloneEditor | null>(null);
   const entryRef = useRef<FileEntry | null>(null);
@@ -98,6 +113,10 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [dirty, setDirtyState] = useState(false);
+
+  // Whether some other extension can render this file — Markdown, JSON/YAML,
+  // CSV. In a tmux pane there was nowhere to put this; a tab has a toolbar.
+  const canPreview = hostCanPreview?.(filePath) ?? false;
 
   const save = useCallback(async () => {
     const entry = entryRef.current;
@@ -151,12 +170,21 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
           scrollBeyondLastLine: false,
           fontFamily: getComputedStyle(document.documentElement).getPropertyValue("--terminal-font").trim() || "monospace",
           fontSize: fontSizeRef.current ?? DEFAULT_FONT_SIZE,
-          // A minimap is dead weight on a phone-width tab.
-          minimap: { enabled: !matchMedia("(pointer: coarse) and (hover: none)").matches },
+          minimap: { enabled: minimapEnabled() },
           renderWhitespace: "selection",
         });
         editorRef.current = editor;
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveRef.current());
+
+        // A "file:line" open (terminal ctrl+click, a quick-switcher jump)
+        // parks its line number in requests.ts — the viewer path alone can't
+        // carry it. Also re-read on reloadKey below, since re-opening an
+        // already-open tab is how a second jump arrives.
+        const jump = takeFileRequest(filePath)?.line;
+        if (jump !== undefined) {
+          editor.revealLineInCenter(jump);
+          editor.setPosition({ lineNumber: jump, column: 1 });
+        }
 
         const sync = () => {
           const nowDirty = isDirty(acquired.entry);
@@ -196,6 +224,26 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
     if (active) editorRef.current?.layout();
   }, [active]);
 
+  // Settings → Text Editor → Minimap applies to open tabs immediately, the
+  // same way a theme change does.
+  useEffect(
+    () =>
+      onSettingsChange(() => {
+        editorRef.current?.updateOptions({ minimap: { enabled: minimapEnabled() } });
+      }),
+    [],
+  );
+
+  // A re-open of this same tab (see reloadKey) may carry a fresh line to jump
+  // to; the mount effect above handles the first one.
+  useEffect(() => {
+    const jump = takeFileRequest(filePath)?.line;
+    const editor = editorRef.current;
+    if (jump === undefined || !editor) return;
+    editor.revealLineInCenter(jump);
+    editor.setPosition({ lineNumber: jump, column: 1 });
+  }, [filePath, reloadKey]);
+
   return (
     <div className={`text-editor-host${active ? "" : " hidden"}`}>
       {error && <div className="text-editor-status text-editor-error">{error}</div>}
@@ -206,6 +254,15 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
         createPortal(
           <>
             {dirty && <span className="text-editor-dirty-dot" title="Unsaved changes" />}
+            {canPreview && (
+              <button
+                className="icon-button"
+                title="Open Preview"
+                onClick={() => hostOpenPreview?.(filePath)}
+              >
+                <Icon name="open-preview" />
+              </button>
+            )}
             <button
               className="icon-button"
               title={saveError ? `Save failed: ${saveError}` : "Save (Ctrl+S)"}
@@ -223,53 +280,66 @@ function TextEditorView({ filePath, active, toolbarTarget, setDirty, fontSize }:
 
 // ---- Activation ----
 
-interface SettingsApi {
-  get(key: string): unknown;
-}
-
 interface ExtensionContext {
   registerFileViewer(v: {
     id: string;
     extensions: string[];
     mode?: "default" | "preview";
-    component: typeof TextEditorView;
+    component: typeof TextEditorView | typeof DiffEditorView | typeof MergeView;
+  }): void;
+  // Present only on hosts that support the pluggable `editor` setting — this
+  // extension feature-detects it and falls back to being a preview viewer,
+  // which is all it ever was before.
+  registerEditor?(editor: {
+    id: string;
+    label: string;
+    capabilities: ("file" | "diff" | "merge")[];
+    openFile(path: string, line?: number): Promise<void>;
+    openDiff?(req: DiffRequest): Promise<void>;
+    openMerge?(req: MergeRequest): Promise<void>;
   }): void;
   assetUrl(relPath: string): string;
-  settings: SettingsApi;
+  settings: {
+    get(key: string): unknown;
+    onDidChange(cb: () => void): () => void;
+  };
   app: ThemeApi & {
     onDidChangeColorTheme(cb: () => void): () => void;
+    openViewerTab?(viewerId: string, path: string, opts?: { title?: string }): void;
+    canPreview?(path: string): boolean;
+    openPreview?(path: string): void;
+    openDiff?(req: DiffRequest): Promise<boolean>;
   };
 }
 
-// Deliberately excludes extensions with an existing dedicated bundled viewer
-// (json/yml/yaml -> json-preview, md/markdown -> markdown-preview, html/htm
-// -> live-preview, csv/tsv -> csv-preview) — a user-installed extension's
-// same-extension viewer wins over a bundled one (docs/EXTENSION_API.md), so
-// claiming those here would silently shadow the richer built-in previews.
-// Add them back via the textEditor.extensions setting if you'd rather have
-// plain-text editing for one of them.
-const DEFAULT_EXTENSIONS = "ts,tsx,js,jsx,mjs,cjs,css,py,go,rs,sh,txt,toml";
-
-function parseExtensions(raw: unknown): string[] {
-  const csv = typeof raw === "string" && raw.trim() ? raw : DEFAULT_EXTENSIONS;
-  return csv
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-}
+// Only used on a host too old to have the `editor` setting, where this
+// extension can't *be* the editor and falls back to being a preview viewer —
+// see activate(). Omits the extensions that already have a dedicated bundled
+// preview (json/yml/yaml, md/markdown, html/htm, csv/tsv): a user-installed
+// viewer beats a bundled one, so claiming those would shadow the richer
+// built-ins.
+const LEGACY_PREVIEW_EXTENSIONS = [
+  "ts", "tsx", "js", "jsx", "mjs", "cjs", "css", "scss", "less", "py", "go", "rs", "sh", "bash", "zsh",
+  "txt", "toml", "ini", "conf", "java", "c", "h", "cpp", "hpp", "cs", "rb", "php", "sql", "lua", "swift",
+  "kt", "pl", "graphql", "vue", "ps1", "zig", "ex", "exs", "hs", "clj", "scala", "dart", "jl", "groovy",
+  "gradle", "cmake", "vim", "tex", "prisma", "sol", "erl", "xml", "proto", "diff", "patch",
+];
 
 let removeStylesheet: (() => void) | null = null;
 let unsubscribeTheme: (() => void) | null = null;
-// Captured at activation, same as removeStylesheet above — TextEditorView is
-// registered once via registerFileViewer (not passed ctx as a prop), so the
-// component reaches the host's asset resolver and theme API through these.
-let hostAssetUrl: ((relPath: string) => string) | null = null;
-let hostThemeApi: ThemeApi | null = null;
 
 export function activate(ctx: ExtensionContext): void {
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
-  hostAssetUrl = ctx.assetUrl;
-  hostThemeApi = ctx.app;
+  setSettingsApi(ctx.settings);
+  // Viewers are registered by class, so they reach the host through host.ts
+  // rather than a prop — see that module.
+  setHost({
+    assetUrl: ctx.assetUrl,
+    themeApi: ctx.app,
+    openDiff: ctx.app.openDiff,
+    canPreview: ctx.app.canPreview,
+    openPreview: ctx.app.openPreview,
+  });
 
   // Monaco spawns its language-service workers itself; this is the only hook it
   // gives for saying where the scripts live. They're same-origin (the host's
@@ -286,12 +356,42 @@ export function activate(ctx: ExtensionContext): void {
   // first editor tab has actually loaded Monaco.
   unsubscribeTheme = ctx.app.onDidChangeColorTheme(() => refreshTheme(ctx.app));
 
-  const extensions = parseExtensions(ctx.settings.get("textEditor.extensions"));
-  const openOnClick = ctx.settings.get("textEditor.openOnClick") === true;
+  if (typeof ctx.registerEditor === "function") {
+    // The host owns routing entirely. Selected in Settings → Editor, this
+    // editor gets every file the app would otherwise send to nvim; not
+    // selected, it gets nothing — exactly the deal nvim itself has. So the
+    // viewers below claim no file extensions and are reached only through
+    // openViewerTab, from the callbacks here.
+    ctx.registerEditor({
+      id: "monaco",
+      label: "Monaco (Text Editor)",
+      capabilities: ["file", "diff", "merge"],
+      openFile: async (path, line) => {
+        if (line !== undefined) setFileRequest(path, { line });
+        ctx.app.openViewerTab?.("textEditor", path);
+      },
+      openDiff: async (req: DiffRequest) => {
+        // The tab's "path" is a minted key: a diff has no single path, and
+        // one key per open means two diffs of the same file coexist.
+        ctx.app.openViewerTab?.("diff", registerDiffRequest(req), { title: req.title });
+      },
+      openMerge: async (req: MergeRequest) => {
+        ctx.app.openViewerTab?.("merge", registerMergeRequest(req), { title: req.title });
+      },
+    });
+    ctx.registerFileViewer({ id: "textEditor", extensions: [], component: TextEditorView });
+    ctx.registerFileViewer({ id: "diff", extensions: [], component: DiffEditorView });
+    ctx.registerFileViewer({ id: "merge", extensions: [], component: MergeView });
+    return;
+  }
+
+  // Host with no `editor` setting: nothing can select this editor, so fall
+  // back to what it was before — a preview viewer reached through the
+  // FILES-tree hover icon, the "Preview" menu item, or Shift+Enter.
   ctx.registerFileViewer({
     id: "textEditor",
-    extensions,
-    mode: openOnClick ? "default" : "preview",
+    extensions: LEGACY_PREVIEW_EXTENSIONS,
+    mode: "preview",
     component: TextEditorView,
   });
 }
@@ -304,8 +404,8 @@ export function deactivate(): void {
   disposeAllFiles();
   unloadMonaco();
   delete (self as unknown as { MonacoEnvironment?: unknown }).MonacoEnvironment;
-  hostAssetUrl = null;
-  hostThemeApi = null;
+  clearHost();
+  clearSettingsApi();
 }
 
 export type { TokenColorRule };

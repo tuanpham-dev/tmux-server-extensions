@@ -9,3 +9,4 @@ export type MonacoNs = typeof monacoNs;
 export type TextModel = monacoNs.editor.ITextModel;
 export type StandaloneEditor = monacoNs.editor.IStandaloneCodeEditor;
 export type TokenizerState = monacoNs.languages.IState;
+export type StandaloneDiffEditor = monacoNs.editor.IStandaloneDiffEditor;

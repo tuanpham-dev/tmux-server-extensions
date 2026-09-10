@@ -18,5 +18,9 @@
   // Every code extension's src/, plus the ambient declarations they rely on:
   // scripts/engine-support.d.ts types the "@tmux-server/engine-support" host
   // shim, and types/ covers the CSS imports esbuild resolves but tsc can't.
-  "include": ["*/src/**/*", "scripts/engine-support.d.ts", "types/**/*"]
+  "include": ["*/src/**/*", "scripts/engine-support.d.ts", "types/**/*"],
+  // Node test files (run by `npm test` with --experimental-strip-types) import
+  // node:test/node:assert and their subject by explicit .ts path — neither of
+  // which this browser-targeted config models.
+  "exclude": ["*/src/**/*.test.ts"]
 }

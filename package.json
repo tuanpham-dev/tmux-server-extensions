@@ -7,7 +7,8 @@
     "build": "node scripts/build.mjs",
     "pack": "npm run build && node scripts/pack.mjs",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && node scripts/check.mjs"
+    "check": "npm run typecheck && node scripts/check.mjs",
+    "test": "node --experimental-strip-types --test */src/*.test.ts"
   },
   "devDependencies": {
     "@shikijs/core": "^4.4.3",

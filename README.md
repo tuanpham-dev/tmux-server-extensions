@@ -8,7 +8,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 |---|---|---|---|
 | Claude Usage & Auto-Retry | a CLAUDE USAGE panel (token burn per 5-hour block, from local transcripts) plus auto-continue after a usage-limit reset (or ask first) | first-party (tmux-server) | MIT |
 | Agent Monitor | classifies every tmux pane running an agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row | first-party (tmux-server) | MIT |
-| Text Editor | Monaco-based editor tab (the VS Code editor, lazy-loaded) with real TextMate syntax highlighting that matches VS Code/code-server, TS/JS/JSON/CSS/HTML IntelliSense, and save-back to disk | first-party (tmux-server) | MIT |
+| Text Editor | Monaco (the VS Code editor, lazy-loaded), selectable in Settings → Editor as what opens files, git diffs and merge conflicts — real TextMate highlighting matching VS Code/code-server, TS/JS/JSON/CSS/HTML IntelliSense, inline conflict resolution, and save-back to disk | first-party (tmux-server) | MIT |
 | GitHub | GITHUB sidebar tab: open PRs/issues for the active repo, with "Start work" creating a worktree session (optionally priming an agent) | first-party (tmux-server) | MIT |
 | AI Command Search | natural language → shell command via a local AI CLI (Claude Code / Codex / Gemini / custom) | first-party (tmux-server) | MIT |
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
