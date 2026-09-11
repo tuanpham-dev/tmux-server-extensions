@@ -119,14 +119,30 @@ async function mostRecentSessionId(projectDir) {
 const SESSION_ID_TTL_MS = 15_000;
 const sessionIdCache = new Map();
 
-// Returns { id, mtimeMs } of the cwd's most recently active Claude session,
-// or null — cached per project dir like subagent-viewer's own resolver.
+// Which session file to watch is worth caching — a readdir + a stat per
+// entry, and the answer only changes when a new session starts. Its MTIME is
+// not: that number IS the working/waiting signal, and a cached one made the
+// state up to SESSION_ID_TTL_MS stale on top of the threshold, so a pane
+// that had just written its transcript still read as "waiting for you" for
+// the rest of the TTL. The id comes from the cache; the mtime is re-stat'd
+// every call, which is one stat on a known path.
 async function mostRecentSessionCached(projectDir) {
   const cached = sessionIdCache.get(projectDir);
-  if (cached && Date.now() - cached.at < SESSION_ID_TTL_MS) return cached.value;
-  const value = await mostRecentSessionId(projectDir);
-  sessionIdCache.set(projectDir, { at: Date.now(), value });
-  return value;
+  let value = cached && Date.now() - cached.at < SESSION_ID_TTL_MS ? cached.value : undefined;
+  if (value === undefined) {
+    value = await mostRecentSessionId(projectDir);
+    sessionIdCache.set(projectDir, { at: Date.now(), value });
+  }
+  if (!value) return value;
+  try {
+    const fresh = await stat(path.join(projectDir, `${value.id}.jsonl`));
+    return { id: value.id, mtimeMs: fresh.mtimeMs };
+  } catch {
+    // Vanished (a cleared session) — drop the cache entry so the next call
+    // re-resolves rather than reporting a file that is gone.
+    sessionIdCache.delete(projectDir);
+    return null;
+  }
 }
 
 // ---- Pane-title classification (see this file's header for the captured
@@ -209,6 +225,8 @@ async function classifyPane(pane, waitingThresholdMs) {
   return { state: working ? "working" : "waiting", taskLabel, lastActivityAt: transcriptMtime };
 }
 
+// Shorter than the client's own poll beat, so two panes resolving in the
+// same tick share one filesystem read without a later tick reusing it.
 const CLASSIFY_CACHE_TTL_MS = 2_000;
 const classifyCache = new Map(); // cwd -> { at, value }
 
@@ -228,7 +246,7 @@ export function activate({ router, getSettings }) {
         ? settings["agentMonitor.programs"]
         : "claude";
       const thresholdSeconds = Number(settings["agentMonitor.waitingThresholdSeconds"]);
-      const waitingThresholdMs = (Number.isFinite(thresholdSeconds) && thresholdSeconds > 0 ? thresholdSeconds : 15) * 1000;
+      const waitingThresholdMs = (Number.isFinite(thresholdSeconds) && thresholdSeconds > 0 ? thresholdSeconds : 45) * 1000;
 
       const panes = await listAgentPanes(programs);
       const rows = await Promise.all(

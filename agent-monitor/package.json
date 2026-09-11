@@ -17,10 +17,10 @@
         },
         "agentMonitor.waitingThresholdSeconds": {
           "type": "integer",
-          "default": 15,
+          "default": 45,
           "minimum": 3,
           "maximum": 120,
-          "description": "How long an agent's transcript can go unwritten before it's shown as waiting instead of working (only used when the pane title doesn't already say)."
+          "description": "How long an agent's transcript can go unwritten before it's shown as waiting rather than working. Only used when no hook event is fresher (see the extension's README): a single tool call routinely runs longer than a few seconds without writing anything, so a short threshold reports a busy agent as waiting. Install the hooks snippet for the exact answer instead of a timeout."
         }
       }
     }

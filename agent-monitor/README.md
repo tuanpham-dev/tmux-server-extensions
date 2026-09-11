@@ -40,9 +40,13 @@ A server-side poll classifies every pane whose foreground command matches
    label only and the state falls through. Any other title shape is no signal, never
    guessed as a state.
 3. **Transcript recency**, for whichever cwd/session Claude Code itself last wrote to
-   — written within `agentMonitor.waitingThresholdSeconds` means working, otherwise
-   waiting. No transcript at all (a non-Claude agent with no title match either) means
-   waiting.
+   — written within `agentMonitor.waitingThresholdSeconds` (default 45) means working,
+   otherwise waiting. No transcript at all (a non-Claude agent with no title match
+   either) means waiting. The mtime is read fresh on every poll; only the choice of
+   *which* file to watch is cached, since a stale mtime here is a wrong state, not a
+   slightly old one. The threshold is a timeout standing in for knowledge: one tool
+   call routinely runs longer than a few seconds writing nothing, which is what the
+   hooks snippet above removes the need to guess about.
 
 Nothing is ever typed into a pane — every signal here is read-only.
 
