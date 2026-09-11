@@ -1,11 +1,25 @@
 # Agent Monitor
 
 Classifies every tmux pane running an AI coding agent as working / waiting / done, and
-shows it as a colored status dot on that window's own row in the PROJECTS pane (working
-= green, waiting = amber, permission-blocked = orange; `done` gets no dot — it's the
-steady idle state most agent panes sit in, and a permanent dot there would be noise,
-not signal). "Which of my agents needs me?" at a glance, without opening every tab —
-built assuming one window per tab, so a window's dot always reflects a single pane.
+marks that window's own row in the PROJECTS pane:
+
+| State | Mark | Color |
+| --- | --- | --- |
+| working | a dot, slowly pulsing | the theme's active green (`--status-active-bg`) |
+| waiting | a dot | the theme's warning amber (`--warning`) |
+| waiting, on a permission prompt | **`?`** | the same amber |
+| done | nothing | — |
+
+The state that is blocking *you* differs in shape, not in a third shade of dot: a `?`
+reads before its color does, and can't be mistaken for the working dot at a glance.
+Working pulses because a static dot says "this pane is an agent" while a moving one
+says "it's still going". `done` gets no mark at all — it's the steady idle state most
+agent panes sit in, and a permanent dot there would be noise, not signal. Colors are
+theme tokens (with the old fixed hexes as fallbacks), so they follow the theme like
+every other indicator in that tree.
+
+"Which of my agents needs me?" at a glance, without opening every tab — built assuming
+one window per tab, so a window's mark always reflects a single pane.
 
 ## How it works
 
@@ -14,12 +28,17 @@ A server-side poll classifies every pane whose foreground command matches
 
 1. **An opt-in Claude Code hooks event** (see below) for that pane's resolved Claude
    session, when it's fresher than the session's last transcript write — the
-   high-fidelity signal: a `Notification` hook means waiting on a permission prompt,
-   a `Stop` hook means done.
-2. **The pane's tmux title.** Claude Code sets an OSC title of `<glyph> <task>` — a
-   rotating quarter-circle glyph (◐◑◓◒) while working, a fixed `✳` once idle. An
-   unrecognized title shape (a non-Claude agent, or a format this hasn't seen) is
-   treated as no signal, never guessed as a state.
+   high-fidelity signal. `Notification` means waiting on a permission prompt and
+   `Stop` means done (neither is observable any other way: a permission prompt writes
+   nothing to the transcript, and "your turn" is otherwise inferred from silence);
+   `UserPromptSubmit` and `PreToolUse` mean working, which turns the other half of
+   the guess into a fact — the pane is working the moment a prompt is sent or a tool
+   starts, not once the transcript happens to be flushed.
+2. **The pane's tmux title.** Claude Code sets an OSC title of `<glyph> <task>`. A
+   rotating quarter-circle glyph (◐◑◓◒) means working. `✳` does **not** mean idle —
+   it's Claude's own mark, present while it works as well — so it yields the task
+   label only and the state falls through. Any other title shape is no signal, never
+   guessed as a state.
 3. **Transcript recency**, for whichever cwd/session Claude Code itself last wrote to
    — written within `agentMonitor.waitingThresholdSeconds` means working, otherwise
    waiting. No transcript at all (a non-Claude agent with no title match either) means

@@ -173,13 +173,19 @@ async function classifyPane(pane, waitingThresholdMs) {
   const session = await mostRecentSessionCached(projectDir);
   const transcriptMtime = session?.mtimeMs ?? null;
 
-  // 1. Hook event, when fresher than the last transcript write.
+  // 1. Hook event, when fresher than the last transcript write. Fresher is
+  // the whole test: a transcript write after the event means the agent has
+  // moved on from whatever it reported, so the event is spent.
   if (session) {
     const hook = hookEvents.get(session.id);
     if (hook && (transcriptMtime === null || hook.at >= transcriptMtime)) {
-      return hook.state === "permission"
-        ? { state: "waiting", stateDetail: "permission", lastActivityAt: hook.at }
-        : { state: "done", lastActivityAt: hook.at };
+      if (hook.state === "permission") {
+        return { state: "waiting", stateDetail: "permission", lastActivityAt: hook.at };
+      }
+      if (hook.state === "working") {
+        return { state: "working", lastActivityAt: hook.at };
+      }
+      return { state: "done", lastActivityAt: hook.at };
     }
   }
 
@@ -254,8 +260,17 @@ export function activate({ router, getSettings }) {
       res.status(400).json({ error: "session_id is required" });
       return;
     }
+    // Notification and Stop are the two states nothing else can see: a
+    // permission prompt writes nothing to the transcript, and "finished, your
+    // turn" is otherwise only a guess from how long the file has been quiet.
+    // UserPromptSubmit and PreToolUse turn the other half of the guess into a
+    // fact — the pane is working the moment a prompt is sent or a tool
+    // starts, rather than once the transcript happens to be flushed.
     if (hookEventName === "Notification") recordHookEvent(sessionId, "permission");
     else if (hookEventName === "Stop") recordHookEvent(sessionId, "done");
+    else if (hookEventName === "UserPromptSubmit" || hookEventName === "PreToolUse") {
+      recordHookEvent(sessionId, "working");
+    }
     res.status(204).end();
   });
 

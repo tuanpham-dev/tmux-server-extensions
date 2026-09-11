@@ -66,9 +66,18 @@ let refreshDecorations: (() => void) | null = null;
 
 function decorationFor(row: AgentRow | undefined): { badge: string; tooltip: string; className: string } | undefined {
   if (!row || row.state === "done") return undefined;
-  const label = row.state === "waiting" ? "Waiting for you" : "Working";
+  const permission = row.stateDetail === "permission";
+  const label = permission
+    ? "Waiting for you — permission"
+    : row.state === "waiting"
+      ? "Waiting for you"
+      : "Working";
   return {
-    badge: "●",
+    // Shape first, color second. A pane that is blocking on YOU right now
+    // gets a question mark, not a third shade of dot — it reads before the
+    // color does, and it can't be mistaken for the working dot at a glance
+    // (the same reason Orca draws that state as an icon rather than a hue).
+    badge: permission ? "?" : "●",
     tooltip: row.taskLabel ? `${label} — ${row.taskLabel}` : label,
     className: `agent-monitor-badge-${row.stateDetail ?? row.state}`,
   };
@@ -81,8 +90,14 @@ function hooksSnippet(port: number | string): string {
   return JSON.stringify(
     {
       hooks: {
+        // Notification/Stop report the two states nothing else can observe
+        // (a permission prompt writes no transcript; "your turn" is
+        // otherwise inferred from silence). UserPromptSubmit/PreToolUse
+        // confirm "working" instead of leaving it to transcript timing.
         Notification: [{ matcher: "", hooks: [{ type: "command", command }] }],
         Stop: [{ matcher: "", hooks: [{ type: "command", command }] }],
+        UserPromptSubmit: [{ matcher: "", hooks: [{ type: "command", command }] }],
+        PreToolUse: [{ matcher: "", hooks: [{ type: "command", command }] }],
       },
     },
     null,

@@ -1,29 +1,66 @@
-/* PROJECTS-pane window-row badge — a small solid dot, not the host's own
+/* PROJECTS-pane window-row badges — not the host's own
    .window-decoration-badge pill shape (min-width/padding sized for a count
-   like subagent-viewer's, too big for a single status glyph). font-size: 0
-   hides the "●" text itself; the colored circle alone is the indicator. */
+   like subagent-viewer's, too big for a single status glyph).
+
+   Colors come from the host's theme tokens, with the previous hard-coded
+   hexes kept as fallbacks for a theme that defines neither: a status dot
+   that stays GitHub-green on a light or differently-tinted theme is the one
+   thing in the row that doesn't belong to the theme. */
+
+/* working / waiting: a solid dot, the shape a count-free status reads as. */
 .agent-monitor-badge-working,
-.agent-monitor-badge-waiting,
-.agent-monitor-badge-permission {
+.agent-monitor-badge-waiting {
   min-width: 8px;
   width: 8px;
   height: 8px;
   padding: 0;
   border-radius: 50%;
+  /* font-size: 0 hides the "●" text; the colored circle is the indicator. */
   font-size: 0;
 }
 
 .agent-monitor-badge-working {
-  background: #3fb950;
+  background: var(--status-active-bg, #3fb950);
+  /* Breathing, not blinking: a static dot says "this pane is an agent", a
+     moving one says "it is still going". Slow and low-contrast enough to
+     read as ambient rather than as an alert. */
+  animation: agent-monitor-pulse 2s ease-in-out infinite;
+}
+
+@keyframes agent-monitor-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* A frozen half-faded dot would read as a rendering bug rather than as a
+   state, so reduced motion gets the solid dot instead of a stopped one. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-monitor-badge-working {
+    animation: none;
+  }
 }
 
 .agent-monitor-badge-waiting {
-  background: #d29922;
+  background: var(--warning, #d29922);
 }
 
+/* Permission is the one state that is blocking YOU, so it differs in shape
+   rather than only in hue: the "?" the badge carries is the indicator, and
+   nothing about it can be mistaken for the working dot mid-glance. */
 .agent-monitor-badge-permission {
-  background: #f0883e;
-  box-shadow: 0 0 0 2px rgba(240, 136, 62, 0.25);
+  min-width: 8px;
+  padding: 0;
+  background: none;
+  color: var(--warning, #f0883e);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
 }
 
 .agent-monitor-hooks-settings {
