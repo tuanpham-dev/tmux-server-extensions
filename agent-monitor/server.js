@@ -6,14 +6,15 @@
 //   1. an opt-in Claude Code hooks event (POST /event, see the bottom of this
 //      file) for the pane's resolved Claude session id, when fresher than
 //      that session's last transcript write — the high-fidelity signal.
-//   2. else the pane's tmux title: Claude Code sets an OSC title of
-//      "<glyph> <task>" — a rotating quarter-circle glyph (◐◑◓◒) while
-//      working, a fixed "✳" once idle — captured live against a real
-//      session on this machine (2026-08-18): working looked like
-//      "◐ Review onorca.dev and suggest new features" / "◑ Hello", idle
-//      looked like "✳ Claude Code" / "✳ Hello". An unrecognized title
-//      shape (a non-Claude agent, or a title format this hasn't seen) is
-//      *no signal* — falls through to step 3, never invented as a state.
+//   2. else the pane's tmux title, but only when it actually says something:
+//      Claude Code sets an OSC title of "<glyph> <task>". A rotating
+//      quarter-circle glyph (◐◑◓◒) means working. "✳" does NOT mean idle —
+//      re-checked live on 2026-09-10 against a pane that was busy running
+//      tools for minutes, where the title sat at "✳ Status bar additions"
+//      the whole time (12 samples over 5s, never once a quarter-circle). It
+//      is Claude's own mark, not a spinner, so it yields only the task
+//      LABEL and the state falls through to step 3. Same for any other
+//      glyph — a title's shape is never invented into a state.
 //   3. else the cwd's most-recent Claude session transcript's mtime (ported
 //      from core's subagentWatcher.ts / this repo's own claude-auto-retry
 //      convention): written within the threshold -> working, else waiting.
@@ -132,7 +133,10 @@ async function mostRecentSessionCached(projectDir) {
 // evidence) ----
 
 const WORKING_GLYPHS = new Set(["◐", "◑", "◓", "◒"]);
-const IDLE_GLYPH = "✳";
+// Claude Code's own mark in the title. Present whether it's working or
+// waiting (see classifyPane's step 2), so it identifies the agent and the
+// task text — never the state.
+const CLAUDE_GLYPH = "✳";
 
 // Splits "<glyph> <rest>" into { glyph, label }, or null if the title
 // doesn't have that shape at all (a non-Claude agent, or a blank/default
@@ -179,26 +183,24 @@ async function classifyPane(pane, waitingThresholdMs) {
     }
   }
 
-  // 2. Pane-title spinner rule.
+  // 2. Pane-title spinner rule — a quarter-circle is the one glyph that
+  // actually reports a state. Everything else (Claude's own "✳" mark
+  // included) contributes the task label and nothing more.
   const parsed = parseAgentTitle(pane.title);
-  if (parsed) {
-    if (WORKING_GLYPHS.has(parsed.glyph)) {
-      return { state: "working", taskLabel: parsed.label, lastActivityAt: transcriptMtime };
-    }
-    if (parsed.glyph === IDLE_GLYPH) {
-      return { state: "waiting", taskLabel: parsed.label, lastActivityAt: transcriptMtime };
-    }
-    // Recognized shape but unknown glyph (a future Claude Code build, or a
-    // non-Claude agent whose title happens to match) — no signal from the
-    // title; fall through to the transcript check below.
+  const taskLabel = parsed && (WORKING_GLYPHS.has(parsed.glyph) || parsed.glyph === CLAUDE_GLYPH)
+    ? parsed.label
+    : undefined;
+  if (parsed && WORKING_GLYPHS.has(parsed.glyph)) {
+    return { state: "working", taskLabel, lastActivityAt: transcriptMtime };
   }
 
-  // 3. Transcript-mtime fallback.
+  // 3. Transcript-mtime fallback — the signal that survives, since Claude
+  // Code writes its transcript continuously while it works.
   if (transcriptMtime === null) {
-    return { state: "waiting", lastActivityAt: null };
+    return { state: "waiting", taskLabel, lastActivityAt: null };
   }
   const working = Date.now() - transcriptMtime < waitingThresholdMs;
-  return { state: working ? "working" : "waiting", lastActivityAt: transcriptMtime };
+  return { state: working ? "working" : "waiting", taskLabel, lastActivityAt: transcriptMtime };
 }
 
 const CLASSIFY_CACHE_TTL_MS = 2_000;
