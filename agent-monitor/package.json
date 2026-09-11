@@ -2,7 +2,7 @@
   "name": "agent-monitor",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "Agent Monitor",
   "description": "Classifies every tmux pane running an AI coding agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row. Zero-config detection from pane titles and Claude Code transcripts; an optional Claude Code hooks snippet upgrades permission-prompt detection.",
   "icon": "./icon.svg",

@@ -2,7 +2,7 @@
   "name": "prompts",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "displayName": "Prompts",
   "description": "A prompt editor tab for .prompt.md files: \"Prompts: New Prompt\" opens a draft, Refine rewrites it with the AI configured in Settings \u2192 AI, and the first save names the file from its content. Existing prompts open via the FILES-tree \"Edit Prompt\" menu item.",
   "icon": "./icon.svg",
