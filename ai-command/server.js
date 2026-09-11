@@ -1,34 +1,19 @@
-// Server hook for the ai-command extension: POST /generate shells out to a
-// locally installed AI CLI — Claude Code, OpenAI Codex, Google Gemini, or a
-// custom command, chosen via the aiCommand.provider setting — and returns
-// one shell command; POST /type inserts text into the active pane (the same
-// self-contained send-keys route the bundled command-history and snippets
-// extensions carry). The generated command is only ever RETURNED and
-// inserted at the prompt — nothing here executes it.
+// Server hook for the ai-command extension: POST /generate asks the app's
+// shared AI backend (ctx.ai — configured once in Settings → AI, see the
+// host's server/src/ai.ts) for one shell command; POST /type inserts text
+// into the active pane (the same self-contained send-keys route the bundled
+// command-history and snippets extensions carry). The generated command is
+// only ever RETURNED and inserted at the prompt — nothing here executes it.
+//
+// This extension used to carry its own provider table and its own
+// provider/binaryPath/model/customCommand settings, duplicated from prompts.
+// Both moved into core: which AI to use is one decision, not one per
+// extension, so all this contributes now is the prompt.
 import { execFile } from "node:child_process";
 
-const GENERATE_TIMEOUT = 60_000;
 const TMUX_TIMEOUT = 5000;
 const MAX_QUERY_LENGTH = 1000;
 const MAX_TEXT_LENGTH = 4096;
-
-// Each provider: default binary plus how its CLI takes a one-shot prompt
-// and an optional model. All are "print the reply and exit" invocations —
-// no interactive/agent modes.
-const PROVIDERS = {
-  claude: {
-    bin: "claude",
-    args: (prompt, model) => ["-p", ...(model ? ["--model", model] : []), prompt],
-  },
-  codex: {
-    bin: "codex",
-    args: (prompt, model) => ["exec", ...(model ? ["-m", model] : []), prompt],
-  },
-  gemini: {
-    bin: "gemini",
-    args: (prompt, model) => [...(model ? ["-m", model] : []), "-p", prompt],
-  },
-};
 
 function tmux(args) {
   return new Promise((resolve, reject) => {
@@ -53,7 +38,7 @@ function extractCommand(reply) {
   return "";
 }
 
-export function activate({ router, getSettings }) {
+export function activate({ router, ai }) {
   router.post("/generate", async (req, res) => {
     const { query, cwd } = req.body ?? {};
     if (typeof query !== "string" || !query.trim()) {
@@ -64,12 +49,6 @@ export function activate({ router, getSettings }) {
       res.status(400).json({ error: "query too long" });
       return;
     }
-    const settings = await getSettings();
-    const providerId = typeof settings["aiCommand.provider"] === "string" ? settings["aiCommand.provider"] : "claude";
-    const binaryOverride = typeof settings["aiCommand.binaryPath"] === "string" ? settings["aiCommand.binaryPath"].trim() : "";
-    const model = typeof settings["aiCommand.model"] === "string" ? settings["aiCommand.model"].trim() : "";
-    const customCommand =
-      typeof settings["aiCommand.customCommand"] === "string" ? settings["aiCommand.customCommand"].trim() : "";
 
     const prompt =
       "Convert this request into exactly one shell command for a POSIX shell on Linux. " +
@@ -77,42 +56,21 @@ export function activate({ router, getSettings }) {
       (typeof cwd === "string" && cwd ? `Current directory: ${cwd}\n` : "") +
       `Request: ${query.trim()}`;
 
-    let bin;
-    let args;
-    if (providerId === "custom") {
-      if (!customCommand) {
-        res.status(400).json({ error: "custom provider selected but no custom command is configured" });
-        return;
-      }
-      // The user's own configured command line, run via sh with the prompt
-      // appended as its single argument ($0 of the -c script) — quoting
-      // inside customCommand is the user's, prompt content never needs any.
-      bin = "/bin/sh";
-      args = ["-c", `${customCommand} "$0"`, prompt];
-    } else {
-      const provider = PROVIDERS[providerId] ?? PROVIDERS.claude;
-      bin = binaryOverride || provider.bin;
-      args = provider.args(prompt, model);
-    }
-
-    execFile(bin, args, { encoding: "utf8", timeout: GENERATE_TIMEOUT, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) {
-        const detail = (stderr || err.message || "").trim().slice(0, 300);
-        const missing = /ENOENT/.test(err.message ?? "");
-        res.status(502).json({
-          error: missing
-            ? `${providerId} CLI not found ("${bin}") — install it, or pick another provider / set a binary path in this extension's settings`
-            : `${providerId} CLI failed: ${detail || "unknown error"}`,
-        });
-        return;
-      }
-      const command = extractCommand(stdout);
+    try {
+      const command = extractCommand(await ai.run(prompt));
       if (!command) {
-        res.status(502).json({ error: `${providerId} returned no command` });
+        res.status(502).json({ error: "the AI returned no usable command" });
         return;
       }
       res.json({ command });
-    });
+    } catch (err) {
+      // ai.run's AiError codes separate "not configured yet" from "the
+      // provider broke"; the first reads better as guidance than as a 502.
+      const code = err?.code;
+      const configIssue =
+        code === "missing-binary" || code === "missing-key" || code === "missing-model" || code === "missing-command";
+      res.status(configIssue ? 400 : 502).json({ error: String(err?.message ?? err) });
+    }
   });
 
   router.post("/type", async (req, res) => {

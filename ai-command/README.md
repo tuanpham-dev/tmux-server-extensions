@@ -9,17 +9,8 @@ Natural language → shell command, powered by an AI CLI already installed on th
 
 Either way the reply lands on your command line in the active terminal, ready to edit or run yourself.
 
-## Providers
+## Which AI
 
-Pick one in the extension's Settings section:
+This extension has no provider setting of its own. It asks whatever is configured in **Settings → AI**, shared with every other AI feature in the app — the `claude`, `codex` or `agy` CLIs, the Anthropic or OpenAI HTTP APIs, or a custom command. Change it once there and every feature follows.
 
-| Provider | Binary | Invocation |
-|---|---|---|
-| Claude Code (default) | `claude` | `claude -p [--model <m>] <prompt>` |
-| OpenAI Codex | `codex` | `codex exec [-m <m>] <prompt>` |
-| Google Gemini | `gemini` | `gemini [-m <m>] -p <prompt>` |
-| Custom command | — | your command line, prompt appended as its single argument |
-
-Settings: `aiCommand.provider` (which CLI), `aiCommand.binaryPath` (override the binary name/path), `aiCommand.model` (passed as the provider's model flag), `aiCommand.customCommand` (custom provider's command line — it must print exactly one shell command).
-
-The chosen CLI must be installed and authenticated on the **server** machine (it runs there, not in the browser). Expect a few seconds of CLI startup latency per request; a small/fast model helps.
+A CLI provider must be installed and authenticated on the **server** machine — it runs there, not in the browser. Expect a few seconds of startup latency per request; a small, fast model helps.

@@ -1,17 +1,18 @@
 // Server hook for the prompts extension. Two routes, both one-shot calls to
-// a locally installed AI CLI — Claude Code, OpenAI Codex, Google Gemini, or a
-// custom command, chosen via the prompts.provider setting:
+// the app's shared AI backend (ctx.ai — configured once in Settings → AI, see
+// the host's server/src/ai.ts):
 //   POST /refine        rewrite a draft prompt, returns the rewritten text
 //   POST /suggest-name  propose a kebab-case filename for a prompt's content
 // Nothing here writes files or executes any part of the model's reply — the
 // editor saves through the host's own /api/upload route, and both replies are
 // treated as plain text (the name is sanitized to a strict slug below).
-// Deliberately a self-contained copy of ai-command's provider table rather
-// than a shared import: each extension talks only to its own activate()
-// context.
-import { execFile } from "node:child_process";
+//
+// This used to hold a self-contained copy of ai-command's provider table,
+// because an extension talks only to its own activate() context and there was
+// nothing shared to import. Core now owns the provider table and the four
+// settings that drove it, so the copy is gone and this contributes only its
+// two prompts.
 
-const CLI_TIMEOUT = 60_000;
 const MAX_CONTENT_LENGTH = 100_000;
 const MAX_NAME_LENGTH = 60;
 
@@ -24,24 +25,6 @@ const NAME_INSTRUCTION =
   "Suggest a filename for the following prompt, describing what it is about. " +
   "Use 2-5 lowercase words joined by hyphens (kebab-case), no file extension, no path, no quotes. " +
   "Reply with ONLY the filename.";
-
-// Each provider: default binary plus how its CLI takes a one-shot prompt and
-// an optional model. All are "print the reply and exit" invocations — no
-// interactive/agent modes.
-const PROVIDERS = {
-  claude: {
-    bin: "claude",
-    args: (prompt, model) => ["-p", ...(model ? ["--model", model] : []), prompt],
-  },
-  codex: {
-    bin: "codex",
-    args: (prompt, model) => ["exec", ...(model ? ["-m", model] : []), prompt],
-  },
-  gemini: {
-    bin: "gemini",
-    args: (prompt, model) => [...(model ? ["-m", model] : []), "-p", prompt],
-  },
-};
 
 // Strips a wrapping markdown code fence if the model added one despite the
 // instruction. Unlike ai-command's extractCommand, everything between the
@@ -72,46 +55,19 @@ function sanitizeName(reply) {
     .replace(/-+$/g, "");
 }
 
-export function activate({ router, getSettings }) {
-  // Resolves the configured provider into a spawnable (bin, args) pair for a
-  // single one-shot prompt, or an { error } for a misconfigured custom
-  // provider.
-  async function resolveInvocation(prompt) {
-    const settings = await getSettings();
-    const providerId = typeof settings["prompts.provider"] === "string" ? settings["prompts.provider"] : "claude";
-    const binaryOverride =
-      typeof settings["prompts.binaryPath"] === "string" ? settings["prompts.binaryPath"].trim() : "";
-    const model = typeof settings["prompts.model"] === "string" ? settings["prompts.model"].trim() : "";
-    const customCommand =
-      typeof settings["prompts.customCommand"] === "string" ? settings["prompts.customCommand"].trim() : "";
-
-    if (providerId === "custom") {
-      if (!customCommand) {
-        return { error: "custom provider selected but no custom command is configured" };
-      }
-      // The user's own configured command line, run via sh with the prompt
-      // appended as its single argument ($0 of the -c script) — quoting
-      // inside customCommand is the user's, prompt content never needs any.
-      return { providerId, bin: "/bin/sh", args: ["-c", `${customCommand} "$0"`, prompt] };
+export function activate({ router, getSettings, ai }) {
+  // Shared by both routes: ask the configured AI, map its typed "you haven't
+  // configured this yet" errors to 400 and real failures to 502.
+  async function ask(prompt, res, onText) {
+    try {
+      const reply = await ai.run(prompt);
+      onText(reply);
+    } catch (err) {
+      const code = err?.code;
+      const configIssue =
+        code === "missing-binary" || code === "missing-key" || code === "missing-model" || code === "missing-command";
+      res.status(configIssue ? 400 : 502).json({ error: String(err?.message ?? err) });
     }
-    const provider = PROVIDERS[providerId] ?? PROVIDERS.claude;
-    return { providerId, bin: binaryOverride || provider.bin, args: provider.args(prompt, model) };
-  }
-
-  function runCli({ providerId, bin, args }, res, onSuccess) {
-    execFile(bin, args, { encoding: "utf8", timeout: CLI_TIMEOUT, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) {
-        const detail = (stderr || err.message || "").trim().slice(0, 300);
-        const missing = /ENOENT/.test(err.message ?? "");
-        res.status(502).json({
-          error: missing
-            ? `${providerId} CLI not found ("${bin}") — install it, or pick another provider / set a binary path in this extension's settings`
-            : `${providerId} CLI failed: ${detail || "unknown error"}`,
-        });
-        return;
-      }
-      onSuccess(stdout);
-    });
   }
 
   function requireContent(req, res) {
@@ -135,15 +91,10 @@ export function activate({ router, getSettings }) {
       typeof settings["prompts.refineInstruction"] === "string" ? settings["prompts.refineInstruction"].trim() : "";
     const instruction = configured || DEFAULT_REFINE_INSTRUCTION;
 
-    const invocation = await resolveInvocation(`${instruction}\n\n---\n\n${content}`);
-    if (invocation.error) {
-      res.status(400).json({ error: invocation.error });
-      return;
-    }
-    runCli(invocation, res, (stdout) => {
-      const text = stripWrappingFence(stdout);
+    await ask(`${instruction}\n\n---\n\n${content}`, res, (reply) => {
+      const text = stripWrappingFence(reply);
       if (!text) {
-        res.status(502).json({ error: `${invocation.providerId} returned an empty prompt` });
+        res.status(502).json({ error: "the AI returned an empty prompt" });
         return;
       }
       res.json({ text });
@@ -156,15 +107,10 @@ export function activate({ router, getSettings }) {
     // Only the head of the prompt is needed to name it, and a short input
     // keeps this call much faster than /refine.
     const excerpt = content.slice(0, 4000);
-    const invocation = await resolveInvocation(`${NAME_INSTRUCTION}\n\n---\n\n${excerpt}`);
-    if (invocation.error) {
-      res.status(400).json({ error: invocation.error });
-      return;
-    }
-    runCli(invocation, res, (stdout) => {
-      const name = sanitizeName(stdout);
+    await ask(`${NAME_INSTRUCTION}\n\n---\n\n${excerpt}`, res, (reply) => {
+      const name = sanitizeName(reply);
       if (!name) {
-        res.status(502).json({ error: `${invocation.providerId} returned no usable filename` });
+        res.status(502).json({ error: "the AI returned no usable filename" });
         return;
       }
       res.json({ name });
