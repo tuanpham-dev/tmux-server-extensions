@@ -4,7 +4,7 @@
   "publisher": "tmux-server",
   "version": "1.0.0",
   "displayName": "Prompts",
-  "description": "A prompt editor tab for .prompt.md files: \"Prompts: New Prompt\" opens a draft, Refine rewrites it with the AI configured in Settings → AI, and the first save names the file from its content. Existing prompts open via the FILES-tree \"Edit Prompt\" menu item.",
+  "description": "A prompt editor tab for .prompt.md files: \"Prompts: New Prompt\" opens a draft, Refine rewrites it with the AI configured in Settings \u2192 AI, and the first save names the file from its content. Existing prompts open via the FILES-tree \"Edit Prompt\" menu item.",
   "icon": "./icon.svg",
   "tmuxServer": {
     "client": "./dist/client.js",
@@ -14,6 +14,18 @@
     "configuration": {
       "title": "Prompts",
       "properties": {
+        "prompts.aiProfile": {
+          "type": "string",
+          "format": "ai-profile",
+          "default": "",
+          "description": "Which configured AI refines a prompt and names it. \u201cApp default\u201d follows Settings \u2192 AI's own default."
+        },
+        "prompts.aiModel": {
+          "type": "string",
+          "format": "ai-model",
+          "default": "",
+          "description": "Model for refining and naming prompts. Empty uses whatever model the AI above is configured with."
+        },
         "prompts.refineInstruction": {
           "type": "string",
           "default": "Rewrite the following prompt so it is clearer, more specific, and better structured for an AI coding agent. Keep the author's intent and every concrete detail; do not invent requirements. Reply with ONLY the rewritten prompt - no preamble, no commentary, no code fences.",

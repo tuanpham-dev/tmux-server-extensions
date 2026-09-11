@@ -38,7 +38,7 @@ function extractCommand(reply) {
   return "";
 }
 
-export function activate({ router, ai }) {
+export function activate({ router, getSettings, ai }) {
   router.post("/generate", async (req, res) => {
     const { query, cwd } = req.body ?? {};
     if (typeof query !== "string" || !query.trim()) {
@@ -57,7 +57,18 @@ export function activate({ router, ai }) {
       `Request: ${query.trim()}`;
 
     try {
-      const command = extractCommand(await ai.run(prompt));
+      // aiCommand.aiProfile names one of the AIs configured in Settings →
+      // AI; empty (the default) lets the app's default profile answer.
+      const settings = (await getSettings?.()) ?? {};
+      const profileId =
+        typeof settings["aiCommand.aiProfile"] === "string" ? settings["aiCommand.aiProfile"].trim() : "";
+      // Empty falls back to that profile's own model — "use the provider's
+      // setting" — which is what ai.run does with no model of its own.
+      const model =
+        typeof settings["aiCommand.aiModel"] === "string" ? settings["aiCommand.aiModel"].trim() : "";
+      const command = extractCommand(
+        await ai.run(prompt, { ...(profileId ? { profileId } : {}), ...(model ? { model } : {}) }),
+      );
       if (!command) {
         res.status(502).json({ error: "the AI returned no usable command" });
         return;

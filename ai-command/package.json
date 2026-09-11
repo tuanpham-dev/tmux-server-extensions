@@ -4,10 +4,29 @@
   "publisher": "tmux-server",
   "version": "1.1.0",
   "displayName": "AI Command Search",
-  "description": "Natural language to shell command using the AI configured in Settings → AI: \"AI: Generate Command\" in the palette (or a \"??\" quick-switcher query) types the generated command at the prompt for review — never runs it.",
+  "description": "Natural language to shell command using the AI configured in Settings \u2192 AI: \"AI: Generate Command\" in the palette (or a \"??\" quick-switcher query) types the generated command at the prompt for review \u2014 never runs it.",
   "icon": "./icon.svg",
   "tmuxServer": {
     "client": "./dist/client.js",
     "server": "./server.js"
+  },
+  "contributes": {
+    "configuration": {
+      "title": "AI Command",
+      "properties": {
+        "aiCommand.aiProfile": {
+          "type": "string",
+          "format": "ai-profile",
+          "default": "",
+          "description": "Which configured AI turns a request into a shell command. \u201cApp default\u201d follows Settings \u2192 AI's own default; a small, fast model is usually enough for one command."
+        },
+        "aiCommand.aiModel": {
+          "type": "string",
+          "format": "ai-model",
+          "default": "",
+          "description": "Model for turning a request into a command. Empty uses whatever model the AI above is configured with."
+        }
+      }
+    }
   }
 }

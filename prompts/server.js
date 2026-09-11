@@ -60,7 +60,19 @@ export function activate({ router, getSettings, ai }) {
   // configured this yet" errors to 400 and real failures to 502.
   async function ask(prompt, res, onText) {
     try {
-      const reply = await ai.run(prompt);
+      // prompts.aiProfile names one of the AIs configured in Settings → AI;
+      // empty (the default) lets the app's default profile answer.
+      const settings = (await getSettings?.()) ?? {};
+      const profileId =
+        typeof settings["prompts.aiProfile"] === "string" ? settings["prompts.aiProfile"].trim() : "";
+      // Empty falls back to that profile's own model — "use the provider's
+      // setting" — which is what ai.run does with no model of its own.
+      const model =
+        typeof settings["prompts.aiModel"] === "string" ? settings["prompts.aiModel"].trim() : "";
+      const reply = await ai.run(prompt, {
+        ...(profileId ? { profileId } : {}),
+        ...(model ? { model } : {}),
+      });
       onText(reply);
     } catch (err) {
       const code = err?.code;
