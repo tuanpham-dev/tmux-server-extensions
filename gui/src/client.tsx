@@ -124,7 +124,7 @@ function GuiPanel() {
     return (
       <div className="gui-panel">
         <div className="gui-panel-status">
-          xpra isn't installed on this host — see this extension's README for the install command, then reload this
+          xpra isn't installed on this host - see this extension's README for the install command, then reload this
           panel.
         </div>
       </div>
@@ -146,7 +146,7 @@ function GuiPanel() {
           </div>
           {!hasFastEncoding(status.encodings) && (
             <div className="gui-panel-warning">
-              This xpra build only has png encoding available — performance will be degraded. Install a build with
+              This xpra build only has png encoding available - performance will be degraded. Install a build with
               jpeg/webp/vpx support (see README).
             </div>
           )}
@@ -233,7 +233,7 @@ function FullscreenButton({ targetRef }: { targetRef: React.RefObject<HTMLIFrame
   };
 
   return (
-    <button className="gui-view-fullscreen-btn" onClick={() => void toggle()} title={isFullscreen ? "Exit fullscreen" : "Fullscreen (also reclaims most browser shortcuts in Chromium — not Ctrl+W)"}>
+    <button className="gui-view-fullscreen-btn" onClick={() => void toggle()} title={isFullscreen ? "Exit fullscreen" : "Fullscreen (also reclaims most browser shortcuts in Chromium - not Ctrl+W)"}>
       <Icon name={isFullscreen ? "screen-normal" : "screen-full"} />
     </button>
   );
@@ -280,7 +280,7 @@ function GuiView({ active }: GuiViewProps) {
     return (
       <div className="gui-view-host">
         <div className="gui-view-status">
-          No GUI session is running — start one from the GUI Apps sidebar panel.
+          No GUI session is running - start one from the GUI Apps sidebar panel.
           <button className="gui-btn" onClick={load}>
             Retry
           </button>

@@ -109,7 +109,7 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
 
     (async () => {
       try {
-        if (!request) throw new Error("This merge is no longer available — reopen it from Source Control.");
+        if (!request) throw new Error("This merge is no longer available - reopen it from Source Control.");
         if (!hostAssetUrl || !hostThemeApi) throw new Error("The Text Editor extension is not active.");
         const monaco = await loadMonaco(hostAssetUrl, hostThemeApi);
         if (cancelled) return;
@@ -231,7 +231,7 @@ export default function MergeView({ filePath, active, toolbarTarget, setDirty, f
         <div className="text-editor-status">
           {remaining === 0
             ? dirty
-              ? "All conflicts resolved — save to continue."
+              ? "All conflicts resolved - save to continue."
               : "All conflicts resolved."
             : `${remaining} conflict${remaining === 1 ? "" : "s"} remaining.`}
         </div>

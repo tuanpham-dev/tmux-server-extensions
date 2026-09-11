@@ -68,7 +68,7 @@ function decorationFor(row: AgentRow | undefined): { badge: string; tooltip: str
   if (!row || row.state === "done") return undefined;
   const permission = row.stateDetail === "permission";
   const label = permission
-    ? "Waiting for you — permission"
+    ? "Waiting for you - permission"
     : row.state === "waiting"
       ? "Waiting for you"
       : "Working";
@@ -78,7 +78,7 @@ function decorationFor(row: AgentRow | undefined): { badge: string; tooltip: str
     // color does, and it can't be mistaken for the working dot at a glance
     // (the same reason Orca draws that state as an icon rather than a hue).
     badge: permission ? "?" : "●",
-    tooltip: row.taskLabel ? `${label} — ${row.taskLabel}` : label,
+    tooltip: row.taskLabel ? `${label} - ${row.taskLabel}` : label,
     className: `agent-monitor-badge-${row.stateDetail ?? row.state}`,
   };
 }

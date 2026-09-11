@@ -102,7 +102,7 @@ function GenerateDialog({ initialQuery, close }: { initialQuery: string; close: 
             className="aicmd-input"
             autoFocus
             disabled={busy}
-            placeholder="Describe the command — e.g. list the 5 largest files here"
+            placeholder="Describe the command - e.g. list the 5 largest files here"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -116,7 +116,7 @@ function GenerateDialog({ initialQuery, close }: { initialQuery: string; close: 
         {error && <div className="aicmd-error">{error}</div>}
         {!busy && (
           <div className="aicmd-hint">
-            Enter generates and types the command at the prompt — it is never run automatically.
+            Enter generates and types the command at the prompt - it is never run automatically.
           </div>
         )}
       </div>

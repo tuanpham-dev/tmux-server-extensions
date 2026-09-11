@@ -109,7 +109,7 @@ export default function DiffEditorView({ filePath, active, toolbarTarget, setDir
 
     (async () => {
       try {
-        if (!request) throw new Error("This diff is no longer available — reopen it from Source Control.");
+        if (!request) throw new Error("This diff is no longer available - reopen it from Source Control.");
         if (!hostAssetUrl || !hostThemeApi) throw new Error("The Text Editor extension is not active.");
         const monaco = await loadMonaco(hostAssetUrl, hostThemeApi);
         if (cancelled || !containerRef.current) return;

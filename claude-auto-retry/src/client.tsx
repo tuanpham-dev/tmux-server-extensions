@@ -100,7 +100,7 @@ function Toast({ ev, now, onAction }: { ev: LimitEvent; now: number; onAction: (
   if (ev.status === "scheduled") {
     message = (
       <>
-        Claude hit its {kindLabel(ev.kind)} in {title} — auto-continuing in {formatCountdown(ev.sendAt ?? now, now)}
+        Claude hit its {kindLabel(ev.kind)} in {title} - auto-continuing in {formatCountdown(ev.sendAt ?? now, now)}
         {ev.sendAt ? ` (${formatTime(ev.sendAt)})` : ""}.
       </>
     );
@@ -111,7 +111,7 @@ function Toast({ ev, now, onAction }: { ev: LimitEvent; now: number; onAction: (
   } else if (ev.status === "awaiting" && ev.resetAt !== null) {
     message = (
       <>
-        Claude hit its {kindLabel(ev.kind)} in {title} — resets at {formatTime(ev.resetAt)}. Continue after reset?
+        Claude hit its {kindLabel(ev.kind)} in {title} - resets at {formatTime(ev.resetAt)}. Continue after reset?
       </>
     );
     actions = [
@@ -308,7 +308,7 @@ function UsageStatusItem({ context }: { context: StatusItemContext }) {
       className="status-bar-item autoretry-status-item"
       data-menu-trigger="true"
       aria-haspopup="dialog"
-      title="Claude usage — click for the full breakdown"
+      title="Claude usage - click for the full breakdown"
       onClick={(e) => context.openPopover(e.currentTarget.getBoundingClientRect(), <UsagePanel />)}
     >
       <ClaudeMark />
@@ -383,7 +383,7 @@ function UsagePanel() {
           Weekly limit resets {new Date(usage.resetsAtWeekly).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })}.
         </div>
       )}
-      <div className="autoretry-usage-footnote">Estimated from local transcripts — not official rate-limit data.</div>
+      <div className="autoretry-usage-footnote">Estimated from local transcripts - not official rate-limit data.</div>
     </div>
   );
 }

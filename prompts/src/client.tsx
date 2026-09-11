@@ -162,7 +162,7 @@ function NameDialog({
     setError(null);
     if (await fileExists(`${dir}/${clean}${PROMPT_SUFFIX}`)) {
       setChecking(false);
-      setError(`"${clean}${PROMPT_SUFFIX}" already exists — pick another name.`);
+      setError(`"${clean}${PROMPT_SUFFIX}" already exists - pick another name.`);
       return;
     }
     resolve(clean);
@@ -337,7 +337,7 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
     // it from a specific session's cwd.
     const dir = dirnameOf(filePath);
     if (dir === "/" || !dir) {
-      setError("No active session — open a terminal tab so the prompt has a directory to save into.");
+      setError("No active session - open a terminal tab so the prompt has a directory to save into.");
       return;
     }
     const text = contentRef.current;
@@ -354,7 +354,7 @@ function PromptEditor({ filePath, active, toolbarTarget, openInEditor, setDirty,
       dialogMessage = `Couldn't get a suggested name (${errorText(err)}). Pick one yourself.`;
     }
     if (!dialogMessage && (await fileExists(`${dir}/${name}${PROMPT_SUFFIX}`))) {
-      dialogMessage = `"${name}${PROMPT_SUFFIX}" already exists — pick another name.`;
+      dialogMessage = `"${name}${PROMPT_SUFFIX}" already exists - pick another name.`;
     }
     if (dialogMessage) {
       const chosen = await askForName(name, dialogMessage, dir);

@@ -79,11 +79,11 @@ function looksBinary(text: string): boolean {
 async function loadFileText(filePath: string): Promise<string> {
   const size = await headSize(filePath);
   if (size !== null && size > MAX_BYTES) {
-    throw new Error("File is too large to edit here (over 2MB) — open it in another viewer.");
+    throw new Error("File is too large to edit here (over 2MB) - open it in another viewer.");
   }
   const text = await fetchFileText(filePath);
   if (looksBinary(text)) {
-    throw new Error("This file looks binary — open it in another viewer.");
+    throw new Error("This file looks binary - open it in another viewer.");
   }
   return text;
 }
