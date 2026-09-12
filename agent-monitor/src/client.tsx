@@ -1,10 +1,13 @@
-// agent-monitor: every tmux pane running an agent program (default: claude),
-// classified working/waiting/done and shown as a status dot on that
-// window's own PROJECTS-pane row — plus a Settings section for the optional
-// Claude Code hooks upgrade. Host hooks arrive via module-level bridge
-// variables set once in activate(), same pattern as every other
-// bundled-style extension (search, git-scm, worktrees).
-import { useCallback, useEffect, useState } from "react";
+// agent-monitor: every tmux pane running one of the agents in the app's own
+// registry (Settings → Agents), classified working/waiting/done and shown
+// as a status dot on that window's own PROJECTS-pane row. Host hooks arrive
+// via module-level bridge variables set once in activate(), same pattern as
+// every other bundled-style extension (search, git-scm, worktrees).
+//
+// No settings section of its own any more: the hook snippet, the install
+// button and the "have any events arrived" readout all live in core's
+// Settings → Agents now, for every agent at once rather than for Claude
+// Code alone (plans/agent-platform-core.md).
 import "./style.css";
 import { injectStylesheet } from "./injectStylesheet";
 
@@ -12,9 +15,6 @@ import { injectStylesheet } from "./injectStylesheet";
 
 let serverFetch: ((path: string, init?: RequestInit) => Promise<Response>) | null = null;
 let removeStylesheet: (() => void) | null = null;
-// Parsed from ctx.assetUrl() at activate() time — see live-preview's
-// client.tsx for why this is how an extension recovers its own hook base.
-let hookBase = "";
 
 // ---- Types (mirror server.js's /agents response) ----
 
@@ -36,17 +36,6 @@ async function fetchAgents(): Promise<AgentRow[]> {
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   const body = (await res.json()) as { agents: AgentRow[] };
   return body.agents;
-}
-
-function relativeTime(at: number | null): string {
-  if (at === null) return "";
-  const seconds = Math.max(0, Math.round((Date.now() - at) / 1000));
-  if (seconds < 5) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  return `${hours}h ago`;
 }
 
 function rowKey(row: AgentRow): string {
@@ -83,79 +72,6 @@ function decorationFor(row: AgentRow | undefined): { badge: string; tooltip: str
   };
 }
 
-// ---- Settings component: the opt-in Claude Code hooks snippet (T18) ----
-
-function hooksSnippet(port: number | string): string {
-  const command = `curl -s -X POST http://127.0.0.1:${port}${hookBase}/event --data-binary @- -H 'content-type: application/json'`;
-  return JSON.stringify(
-    {
-      hooks: {
-        // Notification/Stop report the two states nothing else can observe
-        // (a permission prompt writes no transcript; "your turn" is
-        // otherwise inferred from silence). UserPromptSubmit/PreToolUse
-        // confirm "working" instead of leaving it to transcript timing.
-        Notification: [{ matcher: "", hooks: [{ type: "command", command }] }],
-        Stop: [{ matcher: "", hooks: [{ type: "command", command }] }],
-        UserPromptSubmit: [{ matcher: "", hooks: [{ type: "command", command }] }],
-        PreToolUse: [{ matcher: "", hooks: [{ type: "command", command }] }],
-      },
-    },
-    null,
-    2,
-  );
-}
-
-function AgentHooksSettings() {
-  const [status, setStatus] = useState<{ received: number; lastAt: number | null; port: number } | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const refresh = useCallback(() => {
-    if (!serverFetch) return;
-    serverFetch("/event-status")
-      .then((res) => res.json())
-      .then((body) => setStatus(body))
-      .catch(() => {
-        // Transient — next poll retries.
-      });
-  }, []);
-
-  useEffect(() => {
-    refresh();
-    const timer = window.setInterval(refresh, 5000);
-    return () => window.clearInterval(timer);
-  }, [refresh]);
-
-  const snippet = hooksSnippet(status ? status.port : "${PORT}");
-
-  return (
-    <div className="agent-monitor-hooks-settings">
-      <p className="agent-monitor-hooks-description">
-        Merge this into <code>~/.claude/settings.json</code>'s <code>hooks</code> section to upgrade
-        permission-prompt and done detection from a best-effort title guess to Claude Code's own events.
-        This extension never edits that file for you.
-      </p>
-      <pre className="agent-monitor-hooks-snippet">{snippet}</pre>
-      <button
-        type="button"
-        className="agent-monitor-hooks-copy"
-        onClick={() => {
-          void navigator.clipboard.writeText(snippet).then(() => {
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 1500);
-          });
-        }}
-      >
-        {copied ? "Copied" : "Copy"}
-      </button>
-      <p className="agent-monitor-hooks-status">
-        {status && status.received > 0
-          ? `${status.received} event${status.received === 1 ? "" : "s"} received (last ${relativeTime(status.lastAt)}).`
-          : "No hook events received yet."}
-      </p>
-    </div>
-  );
-}
-
 // ---- Activation ----
 
 interface SessionDecorationContext {
@@ -166,7 +82,6 @@ interface SessionDecorationContext {
 }
 
 interface ExtensionContext {
-  registerSettingsComponent(component: { id: string; component: () => ReturnType<typeof AgentHooksSettings> }): void;
   registerSessionDecorationProvider(provider: {
     id: string;
     provideWindowDecoration: (
@@ -182,14 +97,7 @@ let pollTimer: number | null = null;
 
 export function activate(ctx: ExtensionContext): void {
   serverFetch = ctx.serverFetch;
-  const match = ctx.assetUrl("x").match(/^(\/api\/extensions\/[^/]+)\/file\//);
-  hookBase = match ? match[1].replace("/extensions/", "/ext/") : "";
   removeStylesheet = injectStylesheet(ctx.assetUrl, "dist/client.css");
-
-  ctx.registerSettingsComponent({
-    id: "agentHooks",
-    component: AgentHooksSettings,
-  });
 
   refreshDecorations = ctx.registerSessionDecorationProvider({
     id: "agents",

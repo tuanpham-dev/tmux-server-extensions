@@ -16,15 +16,16 @@ Without either, the panel shows a setup hint instead of an error.
 
 Creates a worktree — for an issue, a new branch off the repo's default branch; for a
 PR, the PR's own head ref (fetched by number via GitHub's `refs/pull/<n>/head`
-convention) — opens it as a session, then (if `github.agents` has at least one preset)
-starts the first configured agent and hands it the issue/PR title and body as a second
-message. The agent's launch command is always submitted; the issue/PR context follows
-`github.sendAutoSubmit` (default off — you review before pressing Enter).
+convention) — opens it as a session, then starts the first agent from **Settings →
+Agents** and hands it the issue/PR title and body as a second message. That list is the
+app's own, shared with every other extension that needs to know what an agent is, so
+there is nothing to configure here. The agent's launch command is always submitted; the
+issue/PR context follows `github.sendAutoSubmit` (default off — you review before
+pressing Enter).
 
 ## Settings
 
 | Key | Default | Description |
 |---|---|---|
 | `github.worktreeLocation` | `{repo}/.worktrees/{branch}` | Where "Start work" creates its worktree — same convention as the bundled Worktrees extension |
-| `github.agents` | Claude Code presets | JSON array of `{name, command}` — the agent "Start work" primes. `[]` skips starting an agent |
 | `github.sendAutoSubmit` | `false` | Submit the issue/PR context to the agent immediately, instead of typing it for review |

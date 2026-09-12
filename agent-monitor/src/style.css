@@ -62,32 +62,3 @@
   line-height: 1;
   text-align: center;
 }
-
-.agent-monitor-hooks-settings {
-  padding: 4px 0;
-}
-
-.agent-monitor-hooks-description {
-  font-size: 12px;
-  color: var(--vscode-descriptionForeground, #999);
-  margin: 0 0 8px;
-}
-
-.agent-monitor-hooks-snippet {
-  background: var(--vscode-textCodeBlock-background, rgba(255, 255, 255, 0.04));
-  padding: 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  overflow-x: auto;
-  white-space: pre;
-}
-
-.agent-monitor-hooks-copy {
-  margin-top: 6px;
-}
-
-.agent-monitor-hooks-status {
-  font-size: 11px;
-  color: var(--vscode-descriptionForeground, #999);
-  margin-top: 6px;
-}

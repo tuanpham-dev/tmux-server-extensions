@@ -2,9 +2,9 @@
   "name": "agent-monitor",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "displayName": "Agent Monitor",
-  "description": "Classifies every tmux pane running an AI coding agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row. Zero-config detection from pane titles and Claude Code transcripts; an optional Claude Code hooks snippet upgrades permission-prompt detection.",
+  "description": "Classifies every tmux pane running an AI coding agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row. Reads the app's own agent list from Settings \u2192 Agents, with zero-config detection from pane titles and Claude Code transcripts; installing the app's agent hooks there upgrades permission-prompt and done detection to the agent's own events, for Codex and Antigravity as well as Claude Code.",
   "icon": "./icon.svg",
   "contributes": {
     "configuration": {
@@ -12,15 +12,15 @@
       "properties": {
         "agentMonitor.programs": {
           "type": "string",
-          "default": "claude",
-          "description": "Comma-separated foreground commands (tmux's pane_current_command) to treat as agents, e.g. \"claude,codex\"."
+          "default": "",
+          "description": "Deprecated - Settings \u2192 Agents now holds the one list of AI agents, and this extension uses it. A value here still overrides that list for this version; clear it to follow Settings \u2192 Agents. Comma-separated foreground commands (tmux's pane_current_command), e.g. \"claude,codex\"."
         },
         "agentMonitor.waitingThresholdSeconds": {
           "type": "integer",
           "default": 45,
           "minimum": 3,
           "maximum": 120,
-          "description": "How long an agent's transcript can go unwritten before it's shown as waiting rather than working. Only used when no hook event is fresher (see the extension's README): a single tool call routinely runs longer than a few seconds without writing anything, so a short threshold reports a busy agent as waiting. Install the hooks snippet for the exact answer instead of a timeout."
+          "description": "How long an agent's transcript can go unwritten before it's shown as waiting rather than working. Only used when no hook event is fresher (see the extension's README): a single tool call routinely runs longer than a few seconds without writing anything, so a short threshold reports a busy agent as waiting. Install the agent hooks from Settings \u2192 Agents for the exact answer instead of a timeout."
         }
       }
     }

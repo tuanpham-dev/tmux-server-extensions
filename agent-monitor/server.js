@@ -1,11 +1,12 @@
-// agent-monitor server hook: lists every tmux pane running a configured
-// agent program and classifies each as working/waiting/done — the source
-// for the PROJECTS-pane window-row status dot. Detection is Orca-style
-// dual-signal:
+// agent-monitor server hook: lists every tmux pane running one of the
+// agents in core's registry and classifies each as working/waiting/done —
+// the source for the PROJECTS-pane window-row status dot. Detection is
+// Orca-style dual-signal:
 //
-//   1. an opt-in Claude Code hooks event (POST /event, see the bottom of this
-//      file) for the pane's resolved Claude session id, when fresher than
-//      that session's last transcript write — the high-fidelity signal.
+//   1. an agent hook event from core's pipeline
+//      (host.agentHooks.subscribe), keyed by the pane it fired in and used
+//      when fresher than that pane's last transcript write — the
+//      high-fidelity signal.
 //   2. else the pane's tmux title, but only when it actually says something:
 //      Claude Code sets an OSC title of "<glyph> <task>". A rotating
 //      quarter-circle glyph (◐◑◓◒) means working. "✳" does NOT mean idle —
@@ -21,6 +22,16 @@
 //      No transcript at all (a non-Claude agent) -> waiting.
 //
 // Never writes into a pane — read-only tmux/filesystem queries only.
+//
+// Both halves used to be this extension's own: a duplicated "what is an
+// agent" setting, and a pasted hooks snippet curling a route of its own
+// (which carried no auth header and only worked because a request with no
+// Origin passes the gate). Core owns both now — the registry in Settings →
+// Agents, and the hook pipeline that installs, receives and normalizes
+// events — so this file consumes them instead
+// (plans/agent-platform-core.md). Keying on the pane rather than on
+// Claude's own session_id is what makes the hook path work for Codex and
+// Antigravity at all: neither sends a session id.
 import { execFile } from "node:child_process";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -48,11 +59,7 @@ function emptyIfNoServer(err) {
 // -a returns the same real pane once per grouped tmuxserver-view-* session
 // it also belongs to — dedup by pane id, preferring the non-view name) ----
 
-async function listAgentPanes(programsCsv) {
-  const programs = programsCsv
-    .split(",")
-    .map((p) => p.trim())
-    .filter(Boolean);
+async function listAgentPanes(programs) {
   let raw;
   try {
     raw = await tmux([
@@ -164,23 +171,43 @@ function parseAgentTitle(title) {
   return { glyph: m[1], label: m[2] };
 }
 
-// ---- Hook events (T18) — keyed by Claude session_id so two agent panes
-// sharing a cwd can't cross-contaminate each other's permission/done state ----
+// ---- Hook events — keyed by tmux pane id, so two agent panes sharing a cwd
+// can't cross-contaminate each other's state, and so an agent that sends no
+// session id of its own (Codex, Antigravity) is served just as well as
+// Claude Code ----
 
 const MAX_HOOK_EVENTS = 200;
-const hookEvents = new Map(); // sessionId -> { state: "permission" | "done", at }
-let hookEventsReceived = 0;
-let hookEventsLastAt = null;
+const hookEvents = new Map(); // paneId -> { state: "permission" | "working" | "done", at }
 
-function recordHookEvent(sessionId, state) {
-  if (hookEvents.size >= MAX_HOOK_EVENTS && !hookEvents.has(sessionId)) {
+// How much later than a hook event a transcript write can be while still
+// counting as part of the same turn rather than as the agent moving on —
+// see classifyPane's step 1 for the measurement this exists for.
+const HOOK_TRANSCRIPT_GRACE_MS = 2_000;
+
+function recordHookEvent(paneId, state) {
+  if (!paneId) return;
+  if (hookEvents.size >= MAX_HOOK_EVENTS && !hookEvents.has(paneId)) {
     const oldestKey = hookEvents.keys().next().value;
     if (oldestKey !== undefined) hookEvents.delete(oldestKey);
   }
-  hookEvents.set(sessionId, { state, at: Date.now() });
-  hookEventsReceived++;
-  hookEventsLastAt = Date.now();
+  hookEvents.set(paneId, { state, at: Date.now() });
 }
+
+// Core's normalized event names -> the state this extension shows. The two
+// that nothing else can observe are `permission` (a prompt writes nothing to
+// any transcript) and `stop` ("finished, your turn", otherwise a guess from
+// how long a file has been quiet). `prompt-submit` and `tool-start` turn the
+// other half of the guess into a fact: the pane is working the moment a turn
+// begins or a tool starts, rather than once a transcript happens to be
+// flushed. `tool-start` only arrives when the user has turned on
+// per-tool-call hooks, and never arrives from Antigravity at all, which is
+// why the transcript-timing fallback below stays.
+const HOOK_STATES = {
+  permission: "permission",
+  stop: "done",
+  "prompt-submit": "working",
+  "tool-start": "working",
+};
 
 // ---- Classification ----
 
@@ -189,20 +216,28 @@ async function classifyPane(pane, waitingThresholdMs) {
   const session = await mostRecentSessionCached(projectDir);
   const transcriptMtime = session?.mtimeMs ?? null;
 
-  // 1. Hook event, when fresher than the last transcript write. Fresher is
-  // the whole test: a transcript write after the event means the agent has
-  // moved on from whatever it reported, so the event is spent.
-  if (session) {
-    const hook = hookEvents.get(session.id);
-    if (hook && (transcriptMtime === null || hook.at >= transcriptMtime)) {
-      if (hook.state === "permission") {
-        return { state: "waiting", stateDetail: "permission", lastActivityAt: hook.at };
-      }
-      if (hook.state === "working") {
-        return { state: "working", lastActivityAt: hook.at };
-      }
-      return { state: "done", lastActivityAt: hook.at };
+  // 1. Hook event for this pane, when the transcript has not moved on since.
+  // "Moved on" needs the grace window: a transcript write AFTER the event
+  // normally means the agent kept going, so the event is spent — but Claude
+  // Code flushes its own turn's last entries immediately after firing Stop,
+  // measured at 79ms later on 2026-09-11, which made every "done" event
+  // look spent the instant it arrived and left the pane reading as working
+  // off step 3's transcript recency. Anything inside the window is that same
+  // flush; anything outside it is the agent genuinely working again (and a
+  // new turn sends its own event anyway, which overwrites this one).
+  //
+  // A pane with no transcript at all (any agent that is not Claude Code) has
+  // nothing to be stale against, so its event always stands — which is the
+  // whole reason this became a pane-keyed lookup.
+  const hook = hookEvents.get(pane.paneId);
+  if (hook && (transcriptMtime === null || hook.at + HOOK_TRANSCRIPT_GRACE_MS >= transcriptMtime)) {
+    if (hook.state === "permission") {
+      return { state: "waiting", stateDetail: "permission", lastActivityAt: hook.at };
     }
+    if (hook.state === "working") {
+      return { state: "working", lastActivityAt: hook.at };
+    }
+    return { state: "done", lastActivityAt: hook.at };
   }
 
   // 2. Pane-title spinner rule — a quarter-circle is the one glyph that
@@ -238,13 +273,63 @@ async function classifyPaneCached(pane, waitingThresholdMs) {
   return value;
 }
 
-export function activate({ router, getSettings }) {
+// What this extension defaulted to before core had a registry, and the floor
+// it falls back to on a core that does not have one yet — see the two
+// optional-call guards below.
+const PRE_REGISTRY_PROGRAMS = ["claude"];
+
+// Which panes count as agents: core's registry (Settings → Agents), with
+// this extension's own deprecated setting still winning while it is set, so
+// upgrading cannot silently reset a list somebody customized. The old key's
+// description points at Settings → Agents and it goes away next version.
+async function resolveAgentPrograms(settings, host) {
+  const legacy = settings["agentMonitor.programs"];
+  if (typeof legacy === "string" && legacy.trim()) {
+    return legacy
+      .split(",")
+      .map((program) => program.trim())
+      .filter(Boolean);
+  }
+  // host.agents arrived with the registry. This extension is installed from
+  // a registry repo, so it can land on ANY core version and there is no
+  // manifest field to declare a minimum one — on an older core it degrades
+  // to what it used to detect rather than throwing and showing no dots at
+  // all.
+  let agents = null;
+  try {
+    agents = (await host.agents?.list()) ?? null;
+  } catch (err) {
+    console.warn("agent-monitor: could not read the agent registry:", err.message);
+  }
+  if (!agents) return PRE_REGISTRY_PROGRAMS;
+  // An entry with no foreground command is a launch preset only and can
+  // never match a pane.
+  return agents.map((agent) => agent.program).filter(Boolean);
+}
+
+export function activate({ router, getSettings, host }) {
+  // Core installs the hooks (Settings → Agents), receives every event at one
+  // endpoint and normalizes it; all this extension does is remember the last
+  // state per pane. The subscription is dropped for us when this server hook
+  // unmounts, so there is nothing to tear down here.
+  //
+  // Optional-called for the same reason as host.agents above: on a core
+  // without the pipeline this has to be a no-op, not a throw. An exception
+  // here would abort activate() and leave the extension with no routes at
+  // all, which would cost the title and transcript signals too — the ones
+  // that never needed hooks.
+  host.agentHooks?.subscribe({
+    events: ["permission", "stop", "prompt-submit", "tool-start"],
+    onEvent(event) {
+      const state = HOOK_STATES[event.event];
+      if (state) recordHookEvent(event.paneId, state);
+    },
+  });
+
   router.get("/agents", async (_req, res) => {
     try {
       const settings = await getSettings();
-      const programs = typeof settings["agentMonitor.programs"] === "string" && settings["agentMonitor.programs"].trim()
-        ? settings["agentMonitor.programs"]
-        : "claude";
+      const programs = await resolveAgentPrograms(settings, host);
       const thresholdSeconds = Number(settings["agentMonitor.waitingThresholdSeconds"]);
       const waitingThresholdMs = (Number.isFinite(thresholdSeconds) && thresholdSeconds > 0 ? thresholdSeconds : 45) * 1000;
 
@@ -266,44 +351,5 @@ export function activate({ router, getSettings }) {
     } catch (err) {
       res.status(500).json({ error: err.message });
     }
-  });
-
-  // Claude Code hooks post here (see the settings component's copy-paste
-  // snippet in src/client.tsx) — a plain curl with no Origin header, which
-  // passes the app's auth/origin gate the same way shell-integration
-  // reports do (server/src/security.ts's isOriginExemptPath).
-  router.post("/event", (req, res) => {
-    const { hook_event_name: hookEventName, session_id: sessionId } = req.body ?? {};
-    if (typeof sessionId !== "string" || !sessionId) {
-      res.status(400).json({ error: "session_id is required" });
-      return;
-    }
-    // Notification and Stop are the two states nothing else can see: a
-    // permission prompt writes nothing to the transcript, and "finished, your
-    // turn" is otherwise only a guess from how long the file has been quiet.
-    // UserPromptSubmit and PreToolUse turn the other half of the guess into a
-    // fact — the pane is working the moment a prompt is sent or a tool
-    // starts, rather than once the transcript happens to be flushed.
-    if (hookEventName === "Notification") recordHookEvent(sessionId, "permission");
-    else if (hookEventName === "Stop") recordHookEvent(sessionId, "done");
-    else if (hookEventName === "UserPromptSubmit" || hookEventName === "PreToolUse") {
-      recordHookEvent(sessionId, "working");
-    }
-    res.status(204).end();
-  });
-
-  router.get("/event-status", (_req, res) => {
-    // port: same-process as core (server hooks mount into the one Express
-    // app), so process.env.PORT is exactly the port core itself listens on
-    // (server/src/index.ts's own default) — the settings snippet needs it to
-    // build a 127.0.0.1 curl target, mirroring shellIntegration.ts's own
-    // convention (a local curl, not a browser-relative URL: the hook runs on
-    // whichever host the tmux panes live on, which may differ from whatever
-    // host the browser used to load this page over a LAN/tunnel).
-    res.json({
-      received: hookEventsReceived,
-      lastAt: hookEventsLastAt,
-      port: Number(process.env.PORT ?? 3001),
-    });
   });
 }

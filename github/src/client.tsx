@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import "./style.css";
 import { injectStylesheet } from "./injectStylesheet";
 import Icon from "./Icon";
-import { sendToAgent } from "./agentTarget";
+import { resolveAgentPresets, sendToAgent, type AgentLaunchPreset } from "./agentTarget";
 
 // ---- Module-level host bridge ----
 
@@ -117,26 +117,16 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-interface AgentPreset {
-  name: string;
-  command: string;
-}
-
-// Same JSON-string setting pattern as the bundled worktrees extension's
-// worktrees.agents.
-function parseAgentPresets(raw: unknown): AgentPreset[] {
-  if (typeof raw !== "string") return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  return parsed.filter(
-    (p): p is AgentPreset =>
-      typeof p === "object" && p !== null && typeof (p as AgentPreset).name === "string" && typeof (p as AgentPreset).command === "string",
-  );
+// Which agents "Start work" can launch comes from the app's own registry
+// (Settings → Agents), shared with every other extension that needs to know
+// what an agent is. This extension's own github.agents setting is gone
+// rather than deprecated: keeping an override for one version was the
+// cautious option, and it was dropped deliberately so there is exactly one
+// place an agent is defined. resolveAgentPresets still falls back to the
+// presets this extension shipped with if the registry cannot be read at all
+// (an older core).
+function agentPresets(): Promise<AgentLaunchPreset[]> {
+  return resolveAgentPresets(undefined);
 }
 
 function readSendAutoSubmit(): boolean {
@@ -203,7 +193,7 @@ function GitHubPanel() {
         const sessionName = sessionNameFor(branch);
         openSessionWindow?.(sessionName, { createCwd: result.path });
 
-        const presets = parseAgentPresets(extSettings?.get("github.agents"));
+        const presets = await agentPresets();
         const preset = presets[0];
         if (preset) {
           await sendToAgent(sessionName, preset.command, true, { retries: 12, retryDelayMs: 400 });
