@@ -10,6 +10,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | Agent Monitor | classifies every tmux pane running an agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row; reads the agent list from Settings → Agents and takes its hook events from the app's own pipeline, so Codex and Antigravity panes get states too, not just Claude Code | first-party (tmux-server) | MIT |
 | Text Editor | Monaco (the VS Code editor, lazy-loaded), selectable in Settings → Editor as what opens files, git diffs and merge conflicts — real TextMate highlighting matching VS Code/code-server, TS/JS/JSON/CSS/HTML IntelliSense, inline conflict resolution, optional vim keybindings, and save-back to disk | first-party (tmux-server) | MIT |
 | GitHub | GITHUB sidebar tab: open PRs/issues for the active repo, with "Start work" creating a worktree session (optionally priming an agent) | first-party (tmux-server) | MIT |
+| Jira | JIRA sidebar tab: issues assigned to you and the active repo's project, with "Start work" creating a worktree session (optionally priming an agent and moving the issue to In Progress) | first-party (tmux-server) | MIT |
 | AI Command Search | natural language → shell command via a local AI CLI (Claude Code / Codex / Gemini / custom) | first-party (tmux-server) | MIT |
 | Prompts | `.prompt.md` editor tab with AI refine + AI-suggested filenames | first-party (tmux-server) | MIT |
 | Full Keyboard | on-screen keyboard | first-party (tmux-server) | MIT |

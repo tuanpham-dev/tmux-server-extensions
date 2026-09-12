@@ -1,0 +1,99 @@
+{
+  "name": "jira",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Jira",
+  "description": "A JIRA sidebar tab listing the issues assigned to you and the active repo's project, with a \"Start work\" action that creates a worktree session for one - optionally priming an agent on it and moving the issue to In Progress. Backed by the Jira Cloud REST API; the API token is held in the host's per-extension secret store, never in a setting.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "Jira",
+      "properties": {
+        "jira.siteUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Jira Cloud site, e.g. https://your-team.atlassian.net"
+        },
+        "jira.email": {
+          "type": "string",
+          "default": "",
+          "description": "Atlassian account email for the API token."
+        },
+        "jira.projectKey": {
+          "type": "string",
+          "default": "",
+          "description": "Fallback project key, when no file, map entry or variable applies."
+        },
+        "jira.projectKeyFile": {
+          "type": "string",
+          "default": ".jira-project",
+          "description": "Repo file holding the project key."
+        },
+        "jira.projectKeyEnv": {
+          "type": "string",
+          "default": "JIRA_PROJECT_KEY",
+          "description": "Environment variable holding the project key."
+        },
+        "jira.projectMap": {
+          "type": "string",
+          "default": "{}",
+          "description": "Project key per repository path, as JSON."
+        },
+        "jira.jql": {
+          "type": "string",
+          "default": "",
+          "description": "Custom JQL for the \"assigned to me\" section."
+        },
+        "jira.projectJql": {
+          "type": "string",
+          "default": "",
+          "description": "Custom JQL for the project section, bypassing the project key."
+        },
+        "jira.maxResults": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 100,
+          "description": "Issues fetched per section."
+        },
+        "jira.commentLimit": {
+          "type": "integer",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Comments handed to the agent with the ticket. 0 sends none."
+        },
+        "jira.branchTemplate": {
+          "type": "string",
+          "default": "{key}-{slug}",
+          "description": "Branch name for \"Start work\" - {key}, {slug}, {type}."
+        },
+        "jira.worktreeLocation": {
+          "type": "string",
+          "default": "{repo}/.worktrees/{branch}",
+          "description": "Where \"Start work\" creates its worktree - {repo}, {branch}."
+        },
+        "jira.sendAutoSubmit": {
+          "type": "boolean",
+          "default": false,
+          "description": "Submit the issue to the agent instead of letting you review it first."
+        },
+        "jira.updateIssueOnStartWork": {
+          "type": "boolean",
+          "default": false,
+          "description": "Let \"Start work\" move and assign the issue in Jira."
+        },
+        "jira.inProgressStatus": {
+          "type": "string",
+          "default": "In Progress",
+          "description": "Status \"Start work\" moves the issue to."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

@@ -1,0 +1,279 @@
+.jira-empty,
+.jira-error,
+.jira-note {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--fg-inactive, #999);
+}
+
+.jira-error {
+  color: var(--error, #f48771);
+}
+
+.jira-panel {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* The resolved project key, under the pane's own header. */
+.jira-caption {
+  padding: 4px 12px 2px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-inactive, #999);
+}
+
+.jira-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.jira-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px 0 0;
+}
+
+.jira-row:hover,
+.jira-row.open {
+  background: var(--list-hover-bg, rgba(255, 255, 255, 0.06));
+}
+
+/* A button, not a link: clicking a row opens the details popover, and the
+   popover carries the "Open in Jira" link. Reset to look like a list row. */
+.jira-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px 4px 5px 12px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.jira-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Key, status chip and age on one muted line under the summary. min-width:0
+   on the row lets the chip ellipsize rather than push the age out of view. */
+.jira-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--fg-inactive, #999);
+}
+
+.jira-key {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+.jira-age {
+  flex: none;
+  margin-left: auto;
+  opacity: 0.8;
+}
+
+/* Status chip. Coloured from Jira's statusCategory, not the status NAME —
+   names are per-workflow ("Feedback", "Client Review"), the three categories
+   are not. Colours come from the theme's own tokens so they survive a theme
+   switch, with a neutral fallback for an unrecognised category. */
+.jira-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 15px;
+  background: var(--list-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--fg-inactive, #999);
+}
+
+.jira-chip[data-cat="new"] {
+  background: color-mix(in srgb, var(--fg-inactive, #999) 22%, transparent);
+  color: var(--fg, #ccc);
+}
+
+.jira-chip[data-cat="indeterminate"] {
+  background: color-mix(in srgb, var(--focus-border, #4a9eff) 26%, transparent);
+  color: var(--fg-bright, #eee);
+}
+
+.jira-chip[data-cat="done"] {
+  background: color-mix(in srgb, var(--success, #4ec9b0) 24%, transparent);
+  color: var(--fg-bright, #eee);
+}
+
+/* Revealed on hover/focus so a dense list stays quiet, but never hidden from
+   keyboard users or while its own action is running. */
+.jira-start {
+  flex: none;
+  opacity: 0;
+}
+
+.jira-row:hover .jira-start,
+.jira-start:focus-visible,
+.jira-start:disabled {
+  opacity: 1;
+}
+
+/* ---- Details popover ---- */
+
+.jira-popover {
+  position: fixed;
+  z-index: 40;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(60vh, 520px);
+  overflow: auto;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--border, #333);
+  border-radius: 6px;
+  background: var(--bg-elevated, var(--bg, #1e1e1e));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+
+.jira-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.jira-pop-head .jira-key {
+  flex: 1;
+  font-size: 11px;
+}
+
+/* "Open in Jira" is an <a> so it gets real link behaviour (middle-click,
+   copy address), but it renders as an icon button — and the host's
+   .icon-button styling doesn't reset the underline a bare anchor carries. */
+.jira-pop-head a.icon-button,
+.jira-pop-head a.icon-button:hover {
+  text-decoration: none;
+}
+
+.jira-pop-title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.jira-pop-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.jira-chip-label {
+  font-family: var(--font-mono, monospace);
+}
+
+.jira-pop-section {
+  margin: 10px 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fg-inactive, #999);
+}
+
+/* Jira descriptions and comments arrive as flattened plain text with real
+   newlines, so they need pre-wrap to keep their shape without a markdown
+   renderer. */
+.jira-pop-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+.jira-comment {
+  padding: 6px 0;
+  border-top: 1px solid var(--border, #333);
+}
+
+.jira-comment-head {
+  margin-bottom: 2px;
+  font-size: 11px;
+  color: var(--fg-inactive, #999);
+}
+
+/* The settings token field carries no styles of its own — it reuses the
+   host's settings-row / dialog-input / dialog-button classes so it matches
+   core's own API key field in every theme. See SettingsPanel.tsx. */
+
+/* The sidebar tab icon.
+   registerSidebarPanel's `icon` is a codicon NAME only — the host renders it
+   as <span class="codicon codicon-{name}"> (client/src/components/Icon.tsx),
+   with no path for an image. So the glyph is replaced here instead, scoped to
+   this extension's own tab via the data-tab-id the host puts on every tab
+   button (client/src/components/SidebarTabStrip.tsx). The mark is inlined as
+   a data URI rather than fetched through ctx.assetUrl so this stays a plain
+   stylesheet with no runtime URL interpolation.
+
+   Monochrome, like every other icon in the strip: this is a MASK, not a
+   background image, so the shape comes from the SVG's alpha and the color
+   from `currentColor`. That means the tab inherits the strip's own
+   active/inactive/hover colors for free instead of hard-coding a brand blue
+   or faking the states with opacity — and it follows a theme switch. The
+   path is the Jira mark, its viewBox cropped to the mark's own bounds.
+
+   Sized to 85% of the box, not 100%: codicon glyphs carry padding inside
+   their em square, so the neighbouring icons in the strip only ink about
+   13.0-14.0px of their 16px box (measured across all six: mean 13.6). A
+   contain-fit mask on a tightly-cropped viewBox would fill the full 16px and
+   read as visibly larger than its siblings. The box itself is 1em rather
+   than a hard 16px so both track the codicon font size. */
+.sidebar-tab[data-tab-id="ext.tmux-server.jira.jira"] .codicon::before {
+  content: "";
+  display: block;
+  width: 1em;
+  height: 1em;
+  background-color: currentColor;
+  -webkit-mask-image: var(--jira-tab-mask);
+  mask-image: var(--jira-tab-mask);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 85%;
+  mask-size: 85%;
+}
+
+.sidebar-tab[data-tab-id="ext.tmux-server.jira.jira"] .codicon {
+  --jira-tab-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='8.2376 10.3896 30.1941 30.4282'%3E%3Cpath fill='%23000' d='M17.9475 31.0469H15.2429C11.1638 31.0469 8.23755 28.5484 8.23755 24.8899H22.7804C23.5341 24.8899 24.0218 25.4252 24.0218 26.1837V40.8178C20.3861 40.8178 17.9475 37.8731 17.9475 33.7684V31.0469ZM25.1303 23.7745H22.4257C18.3466 23.7745 15.4203 21.3206 15.4203 17.6621H29.9631C30.7168 17.6621 31.2489 18.1528 31.2489 18.9113V33.5454C27.6132 33.5454 25.1303 30.6007 25.1303 26.496V23.7745ZM32.3573 16.5467H29.6527C25.5736 16.5467 22.6473 14.0482 22.6473 10.3896H37.1902C37.9439 10.3896 38.4316 10.925 38.4316 11.6389V26.273C34.7959 26.273 32.3573 23.3283 32.3573 19.2236V16.5467Z'/%3E%3C/svg%3E");
+}
+
+/* Links inside a description or comment body. Underlined only on hover so a
+   comment full of URLs doesn't turn into a wall of underlines, and
+   overflow-wrap on the parent already lets a long URL break mid-string. */
+.jira-link {
+  color: var(--link, var(--focus-border, #4a9eff));
+  text-decoration: none;
+}
+
+.jira-link:hover {
+  text-decoration: underline;
+}
