@@ -16,10 +16,11 @@
 //      is Claude's own mark, not a spinner, so it yields only the task
 //      LABEL and the state falls through to step 3. Same for any other
 //      glyph — a title's shape is never invented into a state.
-//   3. else the cwd's most-recent Claude session transcript's mtime (ported
-//      from core's subagentWatcher.ts / this repo's own claude-auto-retry
-//      convention): written within the threshold -> working, else waiting.
-//      No transcript at all (a non-Claude agent) -> waiting.
+//   3. else the pane's own Claude session transcript's mtime: written
+//      within the threshold -> working, else waiting. The session is the one
+//      Claude Code records for this pane (claudePanes.mjs); only a CLI that
+//      recorded none falls back to the cwd's most recent transcript. No
+//      transcript at all (a non-Claude agent) -> waiting.
 //
 // Never writes into a pane — read-only tmux/filesystem queries only.
 //
@@ -33,6 +34,7 @@
 // Claude's own session_id is what makes the hook path work for Codex and
 // Antigravity at all: neither sends a session id.
 import { execFile } from "node:child_process";
+import { claudeSessionsByPane } from "./claudePanes.mjs";
 import { classifyFromHook, reduceHookEvent } from "./hookStatus.mjs";
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -194,9 +196,26 @@ function recordHookEvent(event) {
 
 // ---- Classification ----
 
+// The transcript for this pane's own session. Two Claude panes in one
+// directory share a project dir, so "its most recent transcript" is whichever
+// session wrote last - both panes would read that one session's activity.
+async function paneTranscript(pane) {
+  const own = (await claudeSessionsByPane()).get(pane.paneId);
+  if (own) {
+    const projectDir = path.join(CLAUDE_PROJECTS_DIR, cwdToProjectDirName(own.cwd ?? pane.cwd));
+    try {
+      const s = await stat(path.join(projectDir, `${own.sessionId}.jsonl`));
+      return { id: own.sessionId, mtimeMs: s.mtimeMs };
+    } catch {
+      // Recorded but nothing written yet (a brand-new session).
+      return null;
+    }
+  }
+  return mostRecentSessionCached(path.join(CLAUDE_PROJECTS_DIR, cwdToProjectDirName(pane.cwd)));
+}
+
 async function classifyPane(pane, waitingThresholdMs) {
-  const projectDir = path.join(CLAUDE_PROJECTS_DIR, cwdToProjectDirName(pane.cwd));
-  const session = await mostRecentSessionCached(projectDir);
+  const session = await paneTranscript(pane);
   const transcriptMtime = session?.mtimeMs ?? null;
 
   // 1. Hook evidence for this pane, while it is fresh (hookStatus.mjs). It
@@ -231,16 +250,18 @@ async function classifyPane(pane, waitingThresholdMs) {
   return { state: working ? "working" : "waiting", taskLabel, lastActivityAt: transcriptMtime };
 }
 
-// Shorter than the client's own poll beat, so two panes resolving in the
-// same tick share one filesystem read without a later tick reusing it.
+// Shorter than the client's own poll beat, so a burst of requests shares
+// one classification without a later tick reusing it. Keyed by pane, never
+// by cwd: a cwd key handed the first pane's state, task label and hook
+// record to every other agent pane in the same directory.
 const CLASSIFY_CACHE_TTL_MS = 2_000;
-const classifyCache = new Map(); // cwd -> { at, value }
+const classifyCache = new Map(); // paneId -> { at, value }
 
 async function classifyPaneCached(pane, waitingThresholdMs) {
-  const cached = classifyCache.get(pane.cwd);
+  const cached = classifyCache.get(pane.paneId);
   if (cached && Date.now() - cached.at < CLASSIFY_CACHE_TTL_MS) return cached.value;
   const value = await classifyPane(pane, waitingThresholdMs);
-  classifyCache.set(pane.cwd, { at: Date.now(), value });
+  classifyCache.set(pane.paneId, { at: Date.now(), value });
   return value;
 }
 

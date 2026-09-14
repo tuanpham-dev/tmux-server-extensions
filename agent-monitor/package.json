@@ -2,7 +2,7 @@
   "name": "agent-monitor",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "displayName": "Agent Monitor",
   "description": "Classifies every tmux pane running an AI coding agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row. Reads the app's own agent list from Settings \u2192 Agents, with zero-config detection from pane titles and Claude Code transcripts; installing the app's agent hooks there upgrades permission-prompt and done detection to the agent's own events, for every agent in that list rather than Claude Code alone.",
   "icon": "./icon.svg",
