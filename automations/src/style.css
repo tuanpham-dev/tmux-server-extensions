@@ -4,6 +4,10 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Fill the host's pane box and scroll inside it (the .at-panel rule
+     next door) - without these the list only ever clipped at the bottom. */
+  flex: 1;
+  overflow-y: auto;
   font-size: 12px;
   color: var(--fg);
 }

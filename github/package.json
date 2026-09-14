@@ -2,7 +2,7 @@
   "name": "github",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "displayName": "GitHub",
   "description": "A GITHUB sidebar tab listing the active repo's open pull requests and issues, with a \"Start work\" action that creates a worktree session for one — optionally priming an agent on it. Backed by the `gh` CLI; no credentials of its own.",
   "icon": "./icon.svg",

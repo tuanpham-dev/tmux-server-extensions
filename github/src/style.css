@@ -12,6 +12,11 @@
 .github-panel {
   display: flex;
   flex-direction: column;
+  /* Fill the host's pane box and scroll inside it - without these a long
+     PR or issue list only ever clipped at the bottom. */
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .github-section-header {

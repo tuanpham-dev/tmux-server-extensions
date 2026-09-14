@@ -2,7 +2,7 @@
   "name": "automations",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "Automations",
   "description": "Agent work that starts itself: run a prompt through the app's AI, create an Agent Tasks task or start a worker on a daily, interval or cron schedule, or when an Agent Tasks task completes, fails, blocks, opens a gate or loses its worker. Runs on the server, with no browser open.",
   "icon": "./icon.svg",
