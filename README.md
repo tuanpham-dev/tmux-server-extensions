@@ -21,6 +21,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | GUI Apps | run Linux GUI apps on the server, viewed/controlled in the browser via xpra (adaptive HTML5 remote display) | first-party (tmux-server) | MIT |
 | Dark Modern | color theme (with full `tokenColors`) | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `dark_modern.json` include chain | MIT |
 | Light Modern | color theme (with full `tokenColors`) | flattened from [microsoft/vscode](https://github.com/microsoft/vscode)'s `light_modern.json` include chain | MIT |
+| GitHub Theme | color theme (9 variants: light, dark, dimmed, high contrast, colorblind) | [primer/github-vscode-theme](https://github.com/primer/github-vscode-theme) | MIT |
 | One Dark Pro | color theme (5 variants) | [Binaryify/OneDark-Pro](https://github.com/Binaryify/OneDark-Pro) | MIT |
 | VSCode Icons | file icon theme | [vscode-icons/vscode-icons](https://github.com/vscode-icons/vscode-icons) | MIT |
 | Popular Monospace Fonts | terminal fonts (4 groups) | Fira Code, JetBrains Mono, Cascadia Code, Source Code Pro — via [Fontsource](https://fontsource.org/) | OFL-1.1 |
