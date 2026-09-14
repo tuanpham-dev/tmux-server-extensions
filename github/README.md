@@ -16,8 +16,8 @@ Without either, the panel shows a setup hint instead of an error.
 
 Creates a worktree — for an issue, a new branch off the repo's default branch; for a
 PR, the PR's own head ref (fetched by number via GitHub's `refs/pull/<n>/head`
-convention) — opens it as a session, then starts the first agent from **Settings →
-Agents** and hands it the issue/PR title and body as a second message. That list is the
+convention) — opens it as a session, then starts the first agent from **Settings → AI
+Providers** and hands it the issue/PR title and body as a second message. That list is the
 app's own, shared with every other extension that needs to know what an agent is, so
 there is nothing to configure here. The agent's launch command is always submitted; the
 issue/PR context follows `github.sendAutoSubmit` (default off — you review before

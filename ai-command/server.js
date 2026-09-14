@@ -1,5 +1,5 @@
 // Server hook for the ai-command extension: POST /generate asks the app's
-// shared AI backend (ctx.ai — configured once in Settings → AI, see the
+// shared AI backend (ctx.ai — configured once in Settings → AI Providers, see the
 // host's server/src/ai.ts) for one shell command; POST /type inserts text
 // into the active pane (the same self-contained send-keys route the bundled
 // command-history and snippets extensions carry). The generated command is

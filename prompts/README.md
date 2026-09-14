@@ -20,7 +20,7 @@ The tab reloads the file when you switch back to it (unless you have unsaved cha
 | `prompts.refineInstruction` | see Settings | The instruction sent to the AI when you press Refine. |
 | `prompts.directory` | `plans/prompts` | Where new prompts are saved, relative to the session's working directory. |
 
-Which AI runs Refine is **not** set here — it comes from **Settings → AI**, shared with every other AI feature in the app. A CLI provider must be installed and authenticated on the **server** machine, since it runs there, not in the browser. Expect a few seconds per Refine.
+Which AI runs Refine is **not** set here — it comes from **Settings → AI Providers**, shared with every other AI feature in the app. A CLI provider must be installed and authenticated on the **server** machine, since it runs there, not in the browser. Expect a few seconds per Refine.
 
 Nothing from the AI's reply is ever executed: the refined text lands in the editor, and the suggested filename is reduced to `[a-z0-9-]` before it's used.
 
@@ -28,4 +28,4 @@ Nothing from the AI's reply is ever executed: the refined text lands in the edit
 
 Two entry points need recent tmux-server extension APIs: "Edit Prompt" (FILES-tree menu) needs `registerFileMenuItem`, and "New Prompt Here" (tab group menu) needs `registerTabGroupMenuItem`. Both are called optionally — on an older host those two entries simply don't appear, and everything else still works through the New Prompt command.
 
-A CLI provider runs as the **server** process, so it must be on that process's `PATH`. A server started from a login shell inherits your usual `PATH`; one started by systemd often doesn't, and a CLI installed under `~/.local/bin` can go missing. If Refine reports the CLI wasn't found, set the binary path in Settings → AI.
+A CLI provider runs as the **server** process, so it must be on that process's `PATH`. A server started from a login shell inherits your usual `PATH`; one started by systemd often doesn't, and a CLI installed under `~/.local/bin` can go missing. If Refine reports the CLI wasn't found, make sure it is on the server process's `PATH` - a CLI is offered as an AI by the agent that declares it (Settings → AI Providers), and runs by the program name that agent gives.

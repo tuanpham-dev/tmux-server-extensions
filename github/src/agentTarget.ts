@@ -56,56 +56,35 @@ function matchesProgram(command: string, agents: readonly AgentTargetProgram[]):
 }
 
 // The core agent registry: the one list of "what is an AI agent", edited in
-// Settings → Agents and shared by every extension that needs to find an
+// Settings → AI Providers and shared by every extension that needs to find an
 // agent pane (plans/agent-platform-core.md). A plain same-origin fetch of a
 // public core route, like fetchSessions below.
-export function fetchAgents(): Promise<AgentRegistryEntry[]> {
+export interface AgentRegistry {
+  agents: AgentRegistryEntry[];
+  // The app's one Yolo/Manual choice (Settings → AI Providers). Carried with
+  // the list so no caller has to ask the user again - see resolveAgentPresets.
+  skipPermissions: boolean;
+}
+
+export function fetchAgents(): Promise<AgentRegistry> {
   return fetch("/api/agents").then((res) => {
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-    return res.json().then((body: { agents?: AgentRegistryEntry[] }) => body.agents ?? []);
+    return res.json().then((body: { agents?: AgentRegistryEntry[]; skipPermissions?: boolean }) => ({
+      agents: body.agents ?? [],
+      skipPermissions: body.skipPermissions === true,
+    }));
   });
 }
 
-// What every one of these extensions used to default to before core had a
-// registry. Also the floor they fall back to when it cannot be read - see
-// PRE_REGISTRY_* below.
-const PRE_REGISTRY_PROGRAMS: readonly string[] = ["claude"];
-
-// A registry-shaped fetch that never rejects. An extension from the registry
-// repo can be installed on ANY core version, including one that predates
-// /api/agents (it 404s there, and there is no manifest field to declare a
-// minimum core version). Rejecting would take the feature out entirely -
-// "Send to Agent" erroring, an empty preset menu - so a failure degrades to
-// what this extension shipped with before the registry existed instead. The
-// warning is there because the other cause is a core that HAS the route and
-// is failing, which is worth seeing in a console.
-async function fetchAgentsOrNull(): Promise<AgentRegistryEntry[] | null> {
-  try {
-    return await fetchAgents();
-  } catch (err) {
-    console.warn(
-      "tmux-server: could not read the agent registry (/api/agents); falling back to the pre-registry defaults.",
-      err,
-    );
-    return null;
-  }
-}
-
-// What to match panes against: the extension's own deprecated
-// agentPrograms setting when the user actually set one, else the core
-// registry. Kept for one version so upgrading cannot silently reset a list
-// somebody customized - every migrating extension routes through here, so
-// the deprecation lives in one place rather than three.
-export async function resolveAgentTargets(legacyProgramsCsv: unknown): Promise<AgentTargetProgram[]> {
-  if (typeof legacyProgramsCsv === "string" && legacyProgramsCsv.trim()) {
-    return legacyProgramsCsv
-      .split(",")
-      .map((program) => program.trim())
-      .filter(Boolean)
-      .map((program) => ({ program }));
-  }
-  const agents = await fetchAgentsOrNull();
-  return agents ?? PRE_REGISTRY_PROGRAMS.map((program) => ({ program }));
+// What to match panes against: the core registry, and nothing else. A core
+// without /api/agents makes this reject, and that is the intended answer -
+// there is no older shape to fall back to any more.
+//
+// There used to be two fallbacks ahead of that rejection: each extension's
+// own agentPrograms setting, and a hard-coded pre-registry floor. Both are
+// gone, so the registry is the only place an agent is named.
+export async function resolveAgentTargets(): Promise<AgentTargetProgram[]> {
+  return (await fetchAgents()).agents;
 }
 
 // repoPath and session.path are both `~`-shortened server display paths (the
@@ -130,59 +109,23 @@ export interface AgentLaunchPreset {
   skipPermissionsArgs: string;
 }
 
-// The line to type into the new session: the preset's command, plus its
-// skip-permissions argument(s) when the caller asked for that and the agent
-// actually has some.
-export function launchCommand(preset: AgentLaunchPreset, skipPermissions: boolean): string {
-  if (!skipPermissions || !preset.skipPermissionsArgs) return preset.command;
-  return `${preset.command} ${preset.skipPermissionsArgs}`;
-}
 
-// The two presets the "Start work" flows shipped with before core had a
-// registry, and the floor they fall back to when it cannot be read.
-const PRE_REGISTRY_PRESETS: readonly AgentLaunchPreset[] = [
-  { name: "Claude Code", command: "claude", skipPermissionsArgs: "--dangerously-skip-permissions" },
-];
-
-// The presets to offer: the caller's own deprecated JSON setting when it is
-// set and parseable, else the core registry's enabled entries that have a
-// command. Same one-version deprecation as resolveAgentTargets, for the
-// other of the two shapes "what is an agent" used to be stored in.
-export async function resolveAgentPresets(legacyJson: unknown): Promise<AgentLaunchPreset[]> {
-  if (typeof legacyJson === "string" && legacyJson.trim()) {
-    try {
-      const parsed: unknown = JSON.parse(legacyJson);
-      const presets = Array.isArray(parsed)
-        ? parsed
-            .filter(
-              (p): p is { name: string; command: string } =>
-                typeof p === "object" &&
-                p !== null &&
-                typeof (p as AgentLaunchPreset).name === "string" &&
-                typeof (p as AgentLaunchPreset).command === "string",
-            )
-            // The old JSON shape had no skip-permissions field - a user who
-            // wanted that wrote a second entry with the flag in its command,
-            // which still works exactly as they wrote it.
-            .map((p) => ({ name: p.name, command: p.command, skipPermissionsArgs: "" }))
-        : [];
-      // A stored "[]" means "offer nothing", which is a real choice and has
-      // to win over the registry as much as a populated list does.
-      if (Array.isArray(parsed)) return presets;
-    } catch {
-      // Not JSON any more (a hand-edit) - fall through to the registry
-      // rather than offering nothing.
-    }
-  }
-  const agents = await fetchAgentsOrNull();
-  if (!agents) return PRE_REGISTRY_PRESETS.map((preset) => ({ ...preset }));
-  return agents
+// The presets to offer: the core registry's enabled entries that have a
+// command. Rejects on a core without the registry, like resolveAgentTargets.
+export async function resolveAgentPresets(): Promise<AgentLaunchPreset[]> {
+  const registry = await fetchAgents();
+  return registry.agents
     .filter((agent) => agent.command !== "")
-    .map((agent) => ({
-      name: agent.label || agent.command,
-      command: agent.command,
-      skipPermissionsArgs: agent.skipPermissionsArgs ?? "",
-    }));
+    .map((agent) => {
+      const skipArgs = agent.skipPermissionsArgs ?? "";
+      return {
+        name: agent.label || agent.command,
+        // The Yolo/Manual choice is already applied. A caller launches
+        // `command` as given and never decides this for itself.
+        command: registry.skipPermissions && skipArgs ? `${agent.command} ${skipArgs}` : agent.command,
+        skipPermissionsArgs: skipArgs,
+      };
+    });
 }
 
 // Every window, across every session rooted at or under repoPath, whose

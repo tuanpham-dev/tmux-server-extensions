@@ -118,15 +118,14 @@ function relativeTime(iso: string): string {
 }
 
 // Which agents "Start work" can launch comes from the app's own registry
-// (Settings → Agents), shared with every other extension that needs to know
+// (Settings → AI Providers), shared with every other extension that needs to know
 // what an agent is. This extension's own github.agents setting is gone
 // rather than deprecated: keeping an override for one version was the
 // cautious option, and it was dropped deliberately so there is exactly one
-// place an agent is defined. resolveAgentPresets still falls back to the
-// presets this extension shipped with if the registry cannot be read at all
-// (an older core).
+// place an agent is defined - and there is no fallback list here either: on
+// a core without the registry, resolveAgentPresets rejects.
 function agentPresets(): Promise<AgentLaunchPreset[]> {
-  return resolveAgentPresets(undefined);
+  return resolveAgentPresets();
 }
 
 function readSendAutoSubmit(): boolean {

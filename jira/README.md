@@ -62,7 +62,7 @@ The branch name comes from `jira.branchTemplate`:
 So `{key}-{slug}` gives `CAP-123-fix-header-alignment`, and `{type}/{key}` gives
 `feature/CAP-123`.
 
-The worktree is then opened as a session, and an agent from **Settings → Agents** is started
+The worktree is then opened as a session, and an agent from **Settings → AI Providers** is started
 in it and handed the issue key, summary and description as a second message. With more than
 one agent configured, Start work opens a menu to pick which - and, for an agent that has a
 skip-permissions flag, a **Skip permission prompts** row you can tick first, so yolo mode is

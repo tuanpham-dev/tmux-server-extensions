@@ -16,7 +16,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import "./style.css";
 import { injectStylesheet } from "./injectStylesheet";
 import Icon from "./Icon";
-import { launchCommand, resolveAgentPresets, sendToAgent, type AgentLaunchPreset } from "./agentTarget";
+import { resolveAgentPresets, sendToAgent, type AgentLaunchPreset } from "./agentTarget";
 import SettingsPanel, { onTokenChange, setFetcher } from "./SettingsPanel";
 
 // ---- Module-level host bridge ----
@@ -38,7 +38,7 @@ interface MenuItem {
   onClick: () => void;
   // Leading check icon. The host has supported this all along (see core's
   // MenuItem in client/src/types.ts); this structural copy just never
-  // declared it. Used by "Skip permission prompts" in the Start work menu.
+  // declared it. Informational only - the app applies the Yolo/Manual choice.
   checked?: boolean;
   // Thin divider row - label/onClick are unused placeholders on one.
   separator?: boolean;
@@ -192,7 +192,7 @@ function buildBranch(template: string, issue: IssueRow): string {
 
 // ---- Agent launch presets ----
 // Which agents "Start work" can offer comes from the app's own registry
-// (Settings → Agents), shared with every other extension that needs to know
+// (Settings → AI Providers), shared with every other extension that needs to know
 // what an agent is. This extension never shipped an agents setting of its
 // own, so unlike github and agent-monitor there is no deprecated value to
 // prefer and none is read - resolveAgentPresets still falls back to the
@@ -203,12 +203,6 @@ function buildBranch(template: string, issue: IssueRow): string {
 // parsed inline during render. Cached at module level with a short TTL: the
 // click path always awaits (so it is never wrong about which presets exist),
 // while render reads whatever is cached, which only drives a tooltip.
-// Whether the next "Start work" launches its agent with permission prompts
-// off. A launch-time choice, not a stored setting: it lives for the session
-// and starts off, so nobody inherits yolo mode from last week by accident.
-// The menu shows it as a checkable row (see handleStartClick).
-let skipPermissions = false;
-
 const PRESETS_TTL_MS = 10_000;
 let cachedPresets: AgentLaunchPreset[] = [];
 let cachedPresetsAt = 0;
@@ -219,7 +213,7 @@ let presetsInFlight: Promise<AgentLaunchPreset[]> | null = null;
 function agentPresets(): Promise<AgentLaunchPreset[]> {
   if (Date.now() - cachedPresetsAt < PRESETS_TTL_MS) return Promise.resolve(cachedPresets);
   if (presetsInFlight) return presetsInFlight;
-  presetsInFlight = resolveAgentPresets(undefined)
+  presetsInFlight = resolveAgentPresets()
     .then((presets) => {
       cachedPresets = presets;
       cachedPresetsAt = Date.now();
@@ -232,7 +226,7 @@ function agentPresets(): Promise<AgentLaunchPreset[]> {
 }
 
 // The cached presets for render, kept current by the panel's own re-renders
-// rather than read once at mount - so changing Settings → Agents shows up
+// rather than read once at mount - so changing Settings → AI Providers shows up
 // within the TTL instead of waiting for a remount, which is how the old
 // inline parse behaved.
 function useAgentPresets(): AgentLaunchPreset[] {
@@ -445,11 +439,7 @@ function refresh(): void {
 
 // ---- Start work ----
 
-async function startWork(
-  issue: IssueRow,
-  preset: AgentLaunchPreset | null,
-  skipPrompts = false,
-): Promise<void> {
+async function startWork(issue: IssueRow, preset: AgentLaunchPreset | null): Promise<void> {
   const cwd = state.cwd;
   if (!cwd) return;
   const branch = buildBranch(readSetting("jira.branchTemplate"), issue);
@@ -474,7 +464,8 @@ async function startWork(
     }
 
     if (preset) {
-      await sendToAgent(sessionName, launchCommand(preset, skipPrompts), true, { retries: 12, retryDelayMs: 400 });
+      // Already carries the app's Yolo/Manual choice - see resolveAgentPresets.
+      await sendToAgent(sessionName, preset.command, true, { retries: 12, retryDelayMs: 400 });
       const detail = await apiGet<IssueDetail>(`/issue?key=${encodeURIComponent(issue.key)}`);
       await sendToAgent(sessionName, asPaste(buildAgentBrief(detail)), extSettings?.get("jira.sendAutoSubmit") === true, {
         retries: 6,
@@ -637,38 +628,22 @@ function IssueList({ issues, list, showMenu }: { issues: IssueRow[]; list: ListI
       // event must not be touched after an await.
       const { clientX, clientY } = event;
       const presets = await agentPresets();
-      // A single agent with no skip-permissions flag has nothing to choose
-      // between, so it still starts on one click. A single agent WITH one
-      // does open the menu - otherwise the checkbox would be unreachable.
-      const anySkippable = presets.some((preset) => preset.skipPermissionsArgs);
-      if ((presets.length <= 1 && !anySkippable) || !showMenu) {
+      // Whether to skip permission prompts is NOT asked here. It is one
+      // global choice - Settings → AI Providers' Yolo/Manual - and the app
+      // applies it to the command this extension is handed. Asking again per
+      // issue meant the same question in three places, and a local answer
+      // could silently contradict the global one.
+      if (presets.length <= 1 || !showMenu) {
         void startWork(issue, presets[0] ?? null);
         return;
       }
-      const open = () =>
-        showMenu(clientX, clientY, [
-          ...presets.map((preset) => ({
-            label: preset.name,
-            onClick: () => void startWork(issue, preset, skipPermissions),
-          })),
-          { label: "No agent (worktree only)", onClick: () => void startWork(issue, null) },
-          ...(anySkippable
-            ? [
-                {
-                  label: "Skip permission prompts",
-                  checked: skipPermissions,
-                  // Reopen rather than just toggling: the menu closes on any
-                  // click, and a checkbox you cannot see change is not a
-                  // checkbox. The chosen agent is still one click away.
-                  onClick: () => {
-                    skipPermissions = !skipPermissions;
-                    open();
-                  },
-                },
-              ]
-            : []),
-        ]);
-      open();
+      showMenu(clientX, clientY, [
+        ...presets.map((preset) => ({
+          label: preset.name,
+          onClick: () => void startWork(issue, preset),
+        })),
+        { label: "No agent (worktree only)", onClick: () => void startWork(issue, null) },
+      ]);
     },
     [showMenu, list],
   );

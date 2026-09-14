@@ -119,13 +119,38 @@ function adfToText(node) {
 }
 
 export function activate({ router, getSettings, secrets }) {
+  // Host capabilities an extension needs may simply not exist: this ships from
+  // the registry and can be installed on ANY core, including one older than
+  // extension secret storage. Reaching for a missing one used to throw inside
+  // an async route with no catch, which Express 4 does not handle - it becomes
+  // an unhandled rejection, and Node exits the whole server process. One
+  // extension installed on an old core should never be able to do that.
+  //
+  // So the capability is probed once and substituted when absent, the same way
+  // agent-monitor degrades when /api/agents is missing. Every call site below
+  // uses `store`, so an old core simply looks like "no token stored yet" and
+  // the panel renders its ordinary not-configured state.
+  const secretsAvailable =
+    Boolean(secrets) && typeof secrets.get === "function" && typeof secrets.set === "function";
+  const NO_SECRETS = "This tmux-server is too old to store extension secrets - update it to add a Jira API token.";
+  const store = secretsAvailable
+    ? secrets
+    : {
+        get: async () => null,
+        set: async () => {
+          throw new Error(NO_SECRETS);
+        },
+      };
+  if (!secretsAvailable) {
+    console.warn(`jira: ${NO_SECRETS}`);
+  }
   // ---- Config ----
 
   async function readConfig() {
     const settings = await getSettings();
     const rawSite = typeof settings["jira.siteUrl"] === "string" ? settings["jira.siteUrl"].trim() : "";
     const email = typeof settings["jira.email"] === "string" ? settings["jira.email"].trim() : "";
-    const apiToken = await secrets.get(TOKEN_NAME);
+    const apiToken = await store.get(TOKEN_NAME);
     let siteUrl = "";
     if (rawSite) {
       try {
@@ -504,7 +529,13 @@ export function activate({ router, getSettings, secrets }) {
   // design; this is the extension's own.
 
   router.get("/token", async (_req, res) => {
-    res.json({ set: !!(await secrets.get(TOKEN_NAME)) });
+    // `supported: false` lets the panel say why the field is unusable instead
+    // of showing it as merely not configured yet.
+    try {
+      res.json({ set: !!(await store.get(TOKEN_NAME)), supported: secretsAvailable });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   router.put("/token", async (req, res) => {
@@ -513,8 +544,16 @@ export function activate({ router, getSettings, secrets }) {
       res.status(400).json({ error: "value must be a string" });
       return;
     }
-    await secrets.set(TOKEN_NAME, value.trim() || null);
-    res.status(204).end();
+    if (!secretsAvailable) {
+      res.status(501).json({ error: NO_SECRETS });
+      return;
+    }
+    try {
+      await store.set(TOKEN_NAME, value.trim() || null);
+      res.status(204).end();
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   // ---- Write endpoints ----

@@ -2,7 +2,7 @@
   "name": "ai-command",
   "private": true,
   "publisher": "tmux-server",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "displayName": "AI Command Search",
   "description": "Natural language to shell command using the AI configured in Settings \u2192 AI: \"AI: Generate Command\" in the palette (or a \"??\" quick-switcher query) types the generated command at the prompt for review \u2014 never runs it.",
   "icon": "./icon.svg",

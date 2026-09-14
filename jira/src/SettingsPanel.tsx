@@ -26,6 +26,10 @@ export function onTokenChange(cb: () => void): () => void {
 
 export default function SettingsPanel() {
   const [set, setSet] = useState<boolean | null>(null);
+  // False only on a core too old to store extension secrets. Undefined-safe:
+  // a core that predates the field at all reports nothing, and is treated as
+  // supported so nothing regresses for it.
+  const [supported, setSupported] = useState(true);
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +38,10 @@ export default function SettingsPanel() {
     if (!serverFetch) return;
     serverFetch("/token")
       .then((res) => res.json())
-      .then((body: { set: boolean }) => setSet(body.set))
+      .then((body: { set: boolean; supported?: boolean }) => {
+        setSet(body.set);
+        setSupported(body.supported !== false);
+      })
       .catch((err: Error) => setError(err.message));
   }, []);
 
@@ -75,7 +82,9 @@ export default function SettingsPanel() {
     <div className="settings-row">
       <span className="settings-label">
         API token{" "}
-        <span className="settings-hint">- {set === null ? "checking…" : set ? "stored" : "not set"}</span>
+        <span className="settings-hint">
+          - {!supported ? "unavailable" : set === null ? "checking…" : set ? "stored" : "not set"}
+        </span>
       </span>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input
@@ -84,15 +93,25 @@ export default function SettingsPanel() {
           style={{ flex: 1 }}
           type="password"
           autoComplete="off"
-          placeholder={set ? "Stored - type to replace" : "Paste your Atlassian API token"}
+          placeholder={
+            !supported
+              ? "Update tmux-server to store a token"
+              : set
+                ? "Stored - type to replace"
+                : "Paste your Atlassian API token"
+          }
           value={value}
-          disabled={busy}
+          disabled={busy || !supported}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && value.trim()) void write(value);
           }}
         />
-        <button className="dialog-button primary" disabled={busy || !value.trim()} onClick={() => void write(value)}>
+        <button
+          className="dialog-button primary"
+          disabled={busy || !supported || !value.trim()}
+          onClick={() => void write(value)}
+        >
           Save
         </button>
         {set && (

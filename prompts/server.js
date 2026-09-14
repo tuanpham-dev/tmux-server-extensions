@@ -1,5 +1,5 @@
 // Server hook for the prompts extension. Two routes, both one-shot calls to
-// the app's shared AI backend (ctx.ai — configured once in Settings → AI, see
+// the app's shared AI backend (ctx.ai — configured once in Settings → AI Providers, see
 // the host's server/src/ai.ts):
 //   POST /refine        rewrite a draft prompt, returns the rewritten text
 //   POST /suggest-name  propose a kebab-case filename for a prompt's content
@@ -60,7 +60,7 @@ export function activate({ router, getSettings, ai }) {
   // configured this yet" errors to 400 and real failures to 502.
   async function ask(prompt, res, onText) {
     try {
-      // prompts.aiProfile names one of the AIs configured in Settings → AI;
+      // prompts.aiProfile names one of the AIs configured in Settings → AI Providers;
       // empty (the default) lets the app's default profile answer.
       const settings = (await getSettings?.()) ?? {};
       const profileId =

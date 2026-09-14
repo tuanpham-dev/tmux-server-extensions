@@ -11,6 +11,6 @@ Either way the reply lands on your command line in the active terminal, ready to
 
 ## Which AI
 
-This extension has no provider setting of its own. It asks whatever is configured in **Settings → AI**, shared with every other AI feature in the app — the `claude`, `codex` or `agy` CLIs, the Anthropic or OpenAI HTTP APIs, or a custom command. Change it once there and every feature follows.
+This extension has no provider setting of its own. It asks whatever is configured in **Settings → AI Providers**, shared with every other AI feature in the app — the `claude`, `codex` or `agy` CLIs, the Anthropic or OpenAI HTTP APIs, or a custom command. Change it once there and every feature follows.
 
 A CLI provider must be installed and authenticated on the **server** machine — it runs there, not in the browser. Expect a few seconds of startup latency per request; a small, fast model helps.
