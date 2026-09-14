@@ -48,6 +48,12 @@ const SWEEP_INTERVAL_MS = 15_000;
 const CHECK_WAIT_MAX_MS = 10 * 60 * 1000;
 const LAUNCH_SETTLE_MS = 600;
 const INBOX_LIMIT = 200;
+// dispatch.awaiting while a worker that speaks the protocol has ended its turn
+// without `agent-task done` - almost always an agent waiting for a person in
+// its pane. See onHookEvent.
+const TURN_ENDED = "turn-ended";
+// git's refusal for a worktree with changes, so cleanup can ask before forcing.
+const DIRTY_WORKTREE = /modified or untracked files|use --force/i;
 const TITLE_MAX = 200;
 const SPEC_MAX = 20_000;
 const BODY_MAX = 20_000;
@@ -590,6 +596,83 @@ export function activate({ router, log = console.log, getSettings, host }) {
     return { dispatchId, dispatch: { ...dispatch, worktreePath: shortenHome(cwd) } };
   }
 
+  // ---- Cleanup of finished workers ----
+  //
+  // A finished worker's session (its agent idle at the prompt) and a worktree
+  // agent-tasks created for it are left in place so the work can be reviewed;
+  // these remove them on request. Sessions are killed by the panel through
+  // ctx.app.killSession, which also closes the tabs grouped onto them; the
+  // server only removes worktrees. Only a worktree this extension created
+  // ("new") is ever removed - never the run's repo or a path the user gave -
+  // and never while an active worker is using it. The branch always stays.
+
+  function worktreeInUse(doc, worktreePath) {
+    return Object.values(doc.dispatches).some((d) => d.state === "active" && d.worktreePath === worktreePath);
+  }
+
+  function isWorktreeRemovable(doc, dispatch) {
+    return (
+      dispatch.state !== "active" &&
+      dispatch.worktreeMode === "new" &&
+      !dispatch.worktreeRemovedAt &&
+      !worktreeInUse(doc, dispatch.worktreePath)
+    );
+  }
+
+  async function removeWorkerWorktree(doc, dispatch, force) {
+    const out = { path: shortenHome(dispatch.worktreePath), removed: false, dirty: false, reason: null };
+    if (dispatch.worktreeMode !== "new") return { ...out, reason: "not created by Agent Tasks - left alone" };
+    if (dispatch.worktreeRemovedAt) return { ...out, removed: true, reason: "already removed" };
+    if (worktreeInUse(doc, dispatch.worktreePath)) return { ...out, reason: "in use by an active worker" };
+    const cwd = doc.runs[dispatch.runId]?.repo || dispatch.worktreePath;
+    try {
+      await host.worktrees.remove({ cwd, path: dispatch.worktreePath, force: force === true });
+    } catch (err) {
+      const message = err?.message ?? String(err);
+      if (DIRTY_WORKTREE.test(message)) return { ...out, dirty: true, reason: message };
+      // Already gone from git's view (removed by hand): nothing left to do.
+      if (err?.status !== 404) return { ...out, reason: message };
+    }
+    const now = Date.now();
+    await s.update((draft) => {
+      for (const d of Object.values(draft.dispatches)) {
+        if (d.worktreePath === dispatch.worktreePath) d.worktreeRemovedAt = now;
+      }
+    });
+    return { ...out, removed: true };
+  }
+
+  async function cleanupWorker(body) {
+    if (!host.worktrees?.remove) throw new HttpError(501, "this tmux-server is too old to remove worktrees - update it");
+    const dispatchId = str(body.dispatchId, "dispatchId", { required: true });
+    const doc = await s.get();
+    const dispatch = doc.dispatches[dispatchId];
+    if (!dispatch) throw notFound(`no dispatch ${dispatchId}`);
+    if (dispatch.state === "active") throw conflict("that worker is still running - stop it first");
+    const worktree = bool(body.removeWorktree) ? await removeWorkerWorktree(doc, dispatch, bool(body.force)) : null;
+    return { dispatchId, sessionName: dispatch.sessionName, worktree };
+  }
+
+  async function cleanupRun(body) {
+    if (!host.worktrees?.remove) throw new HttpError(501, "this tmux-server is too old to remove worktrees - update it");
+    const runId = str(body.runId, "runId", { required: true });
+    const doc = await s.get();
+    if (!doc.runs[runId]) throw notFound(`no run ${runId}`);
+    const finished = Object.values(doc.dispatches).filter((d) => d.runId === runId && d.state !== "active");
+    const { panes } = await allPanes().catch(() => ({ panes: new Map() }));
+    const sessions = [...new Set(finished.filter((d) => panes.has(d.paneId)).map((d) => d.sessionName))];
+    const worktrees = [];
+    if (bool(body.removeWorktrees)) {
+      const seen = new Set();
+      for (const d of finished) {
+        if (d.worktreeMode !== "new" || d.worktreeRemovedAt || seen.has(d.worktreePath)) continue;
+        seen.add(d.worktreePath);
+        worktrees.push(await removeWorkerWorktree(await s.get(), d, bool(body.force)));
+      }
+    }
+    return { runId, sessions, worktrees };
+  }
+
   async function stopWorker(body) {
     const taskId = str(body.taskId, "taskId");
     const dispatchId = str(body.dispatchId, "dispatchId");
@@ -610,7 +693,23 @@ export function activate({ router, log = console.log, getSettings, host }) {
     const doc = await s.get();
     const dispatch = doc.dispatches[dispatchId];
     if (!dispatch) throw new ControlError(404, `no dispatch ${dispatchId}`);
+    await noteProtocolUse(dispatch);
     return { doc, dispatch };
+  }
+
+  // A worker that has used any worker verb speaks the protocol, so from then
+  // on only its own `done` finishes the task (see onHookEvent). Using a verb
+  // again also means it is back at work, which clears a turn-ended wait.
+  // Written once, not on every verb, so a polling worker does not rewrite the
+  // store.
+  async function noteProtocolUse(dispatch) {
+    if (dispatch.state !== "active" || (dispatch.usedCliAt && dispatch.awaiting !== TURN_ENDED)) return;
+    await s.update((doc) => {
+      const live = doc.dispatches[dispatch.id];
+      if (live?.state !== "active") return;
+      if (!live.usedCliAt) live.usedCliAt = Date.now();
+      if (live.awaiting === TURN_ENDED) live.awaiting = null;
+    });
   }
 
   async function touch(dispatchId, fields = {}) {
@@ -770,6 +869,7 @@ export function activate({ router, log = console.log, getSettings, host }) {
     const dispatchId = typeof body.dispatchId === "string" ? body.dispatchId : "";
     if (dispatchId && doc.dispatches[dispatchId]) {
       const dispatch = doc.dispatches[dispatchId];
+      await noteProtocolUse(dispatch);
       out.dispatch = dispatch;
       if (doc.tasks[dispatch.taskId]) out.task = decorateTask(doc, dispatch.taskId);
       out.run = doc.runs[dispatch.runId] ?? null;
@@ -843,6 +943,32 @@ export function activate({ router, log = console.log, getSettings, host }) {
         await touch(dispatch.id);
         return;
       }
+      // A turn ending is not the task ending for a worker that speaks the
+      // protocol: it was told to finish with `agent-task done`, so a stop
+      // without one means it stopped early - typically asking something in
+      // chat instead of through `agent-task ask`. Completing it here would mark
+      // unfinished work as succeeded. Flag it once and leave the task open.
+      // An agent that never used the CLI keeps the old rule, since its stop is
+      // the only "finished" it will ever send.
+      if (dispatch.usedCliAt) {
+        await s.update((d) => {
+          const live = d.dispatches[dispatch.id];
+          if (live?.state !== "active") return;
+          live.lastHeartbeatAt = Date.now();
+          if (live.awaiting === TURN_ENDED) return;
+          live.awaiting = TURN_ENDED;
+          const task = d.tasks[live.taskId];
+          fileMessage(d, {
+            runId: live.runId,
+            taskId: live.taskId,
+            dispatchId: live.id,
+            from: live.id,
+            type: "escalation",
+            body: `Worker for "${task?.title ?? live.taskId}" ended its turn without running agent-task done. It is probably waiting for input in its pane - open its session, or mark the task complete or failed.`,
+          });
+        });
+        return;
+      }
       if (completeRejection(doc, dispatch.taskId, dispatch.id)) return;
       await completeThroughDispatch({
         dispatchId: dispatch.id,
@@ -892,7 +1018,9 @@ export function activate({ router, log = console.log, getSettings, host }) {
         } else {
           // A renamed session changes nothing but the name shown.
           if (pane.sessionName !== d.sessionName) d.sessionName = pane.sessionName;
-          if (now - (d.lastHeartbeatAt ?? d.startedAt) > heartbeatTimeoutMs) {
+          // Waiting on a person (a gate, a permission prompt, a turn that
+          // ended early) is not a dead worker; only a gone pane is.
+          if (!d.awaiting && now - (d.lastHeartbeatAt ?? d.startedAt) > heartbeatTimeoutMs) {
             reason = `no sign of life for ${Math.round((now - (d.lastHeartbeatAt ?? d.startedAt)) / 1000)}s`;
           }
         }
@@ -920,9 +1048,17 @@ export function activate({ router, log = console.log, getSettings, host }) {
     const tasks = Object.values(doc.tasks)
       .sort((a, b) => a.createdAt - b.createdAt)
       .map((t) => decorateTask(doc, t.id));
+    // Whether each worker's pane still exists, so the panel can offer to close
+    // what a finished worker left behind. null when tmux could not be read.
+    const { panes, certain } = await allPanes().catch(() => ({ panes: new Map(), certain: false }));
     const dispatches = Object.values(doc.dispatches)
       .sort((a, b) => b.startedAt - a.startedAt)
-      .map((d) => ({ ...d, worktreePath: shortenHome(d.worktreePath) }));
+      .map((d) => ({
+        ...d,
+        worktreePath: shortenHome(d.worktreePath),
+        sessionAlive: panes.has(d.paneId) ? true : certain ? false : null,
+        worktreeRemovable: isWorktreeRemovable(doc, d),
+      }));
     const gates = Object.values(doc.gates).sort((a, b) => b.createdAt - a.createdAt);
     const inbox = Object.values(doc.messages)
       .filter((m) => m.to === COORDINATOR)
@@ -955,6 +1091,8 @@ export function activate({ router, log = console.log, getSettings, host }) {
   router.post("/message-ack", route(async (req, res) => res.json(await ackMessages(req.body ?? {}))));
   router.post("/worker-start", route(async (req, res) => res.json(await startWorker(req.body ?? {}))));
   router.post("/worker-stop", route(async (req, res) => res.json(await stopWorker(req.body ?? {}))));
+  router.post("/worker-cleanup", route(async (req, res) => res.json(await cleanupWorker(req.body ?? {}))));
+  router.post("/run-cleanup", route(async (req, res) => res.json(await cleanupRun(req.body ?? {}))));
   router.post(
     "/reset",
     route(async (req, res) => {

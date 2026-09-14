@@ -5,9 +5,10 @@
 // that matters: a `stop` for a worker's own pane completes its task, and a
 // `stop` for any other pane changes nothing.
 import assert from "node:assert/strict";
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { request } from "node:http";
 import { after, before, test } from "node:test";
 
 // server.js resolves its config dir at import time.
@@ -58,11 +59,42 @@ const host = {
     },
   },
   worktrees: {
-    create: async () => {
-      throw new Error("not used");
+    create: async ({ branch }: { branch: string }) => {
+      const target = path.join(configHome, "worktrees", branch);
+      await mkdir(target, { recursive: true });
+      return { path: target, branch };
+    },
+    remove: async ({ path: target, force }: { path: string; force?: boolean }) => {
+      removed.push({ path: target, force: force === true });
+      if (dirtyWorktrees.has(target) && !force) {
+        throw new Error(`fatal: '${target}' contains modified or untracked files, use --force to delete it`);
+      }
+      return { removed: target };
     },
   },
 };
+const removed: { path: string; force: boolean }[] = [];
+const dirtyWorktrees = new Set<string>();
+
+// A worker verb over the control socket, exactly as cli/agent-task sends one.
+function verb(name: string, body: Record<string, unknown>): Promise<{ status: number; body: any }> {
+  const socketPath = path.join(configHome, "tmux-server", "agent-tasks", "control.sock");
+  return new Promise((resolve, reject) => {
+    const req = request(
+      { socketPath, method: "POST", path: `/${name}`, headers: { "content-type": "application/json" } },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          const json = String(res.headers["content-type"] ?? "").includes("json");
+          resolve({ status: res.statusCode ?? 0, body: json && data ? JSON.parse(data) : data });
+        });
+      },
+    );
+    req.on("error", reject);
+    req.end(JSON.stringify(body));
+  });
+}
 
 function call(method: string, route: string, body: unknown = {}): Promise<{ status: number; body: any }> {
   const handler = routes.get(`${method} ${route}`);
@@ -102,12 +134,12 @@ async function stateOf(taskId: string) {
   };
 }
 
-async function startedTask(title: string) {
-  const run = await call("POST", "/run-create", { objective: "hooks", repo: configHome });
+async function startedTask(title: string, worktree = "current", runId?: string) {
+  const run = runId ? { body: { runId } } : await call("POST", "/run-create", { objective: "hooks", repo: configHome });
   const task = await call("POST", "/task-create", { runId: run.body.runId, title });
-  const started = await call("POST", "/worker-start", { taskId: task.body.taskId, agentId: "t.agents.claude" });
+  const started = await call("POST", "/worker-start", { taskId: task.body.taskId, agentId: "t.agents.claude", worktree });
   assert.equal(started.status, 200, JSON.stringify(started.body));
-  return { taskId: task.body.taskId as string, dispatch: started.body.dispatch };
+  return { taskId: task.body.taskId as string, runId: run.body.runId as string, dispatch: started.body.dispatch };
 }
 
 before(async () => {
@@ -207,6 +239,130 @@ test("a permission prompt files a question naming the tool", async () => {
   assert.match(question.body, /Bash/);
   assert.equal(dispatch.awaiting, "permission");
 });
+
+test("a worker that used agent-task is not finished by a turn end, and is flagged once", async () => {
+  const { taskId, dispatch: started } = await startedTask("stops early");
+  assert.equal((await verb("heartbeat", { dispatchId: started.id, status: "working" })).status, 200);
+
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  const escalations = async () =>
+    (await stateOf(taskId)).inbox.filter((m: { type: string; taskId: string }) => m.type === "escalation" && m.taskId === taskId);
+  await waitFor(async () => (await escalations()).length === 1);
+  let { task, dispatch } = await stateOf(taskId);
+  assert.equal(task.status, "dispatched", "unfinished work is not marked succeeded");
+  assert.equal(dispatch.state, "active");
+  assert.equal(dispatch.awaiting, "turn-ended");
+  assert.match((await escalations())[0].body, /without running agent-task done/);
+
+  // The next turn end while still waiting adds nothing to the inbox.
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.equal((await escalations()).length, 1);
+
+  // Back at work: using the CLI again clears the wait.
+  await verb("heartbeat", { dispatchId: started.id });
+  ({ dispatch } = await stateOf(taskId));
+  assert.equal(dispatch.awaiting, null);
+
+  // Only its own done finishes it.
+  assert.equal((await verb("done", { dispatchId: started.id, outcome: "succeeded", body: "finished" })).status, 200);
+  ({ task, dispatch } = await stateOf(taskId));
+  assert.equal(task.status, "completed");
+  assert.equal(dispatch.completedBy, "cli");
+});
+
+test("reading the brief or status from the pane counts as using agent-task", async () => {
+  const { taskId, dispatch: started } = await startedTask("reads brief");
+  assert.equal((await verb("dispatch-show", { dispatchId: started.id })).status, 200);
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  await waitFor(async () => (await stateOf(taskId)).dispatch.awaiting === "turn-ended");
+  assert.equal((await stateOf(taskId)).task.status, "dispatched");
+});
+
+test("cleanup refuses a running worker", async () => {
+  const { dispatch } = await startedTask("still running");
+  const res = await call("POST", "/worker-cleanup", { dispatchId: dispatch.id, removeWorktree: true });
+  assert.equal(res.status, 409);
+});
+
+test("a finished worker's own worktree can be removed, keeping the branch; the state shows what is left", async () => {
+  const { taskId, dispatch: started } = await startedTask("own worktree", "new");
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  await waitFor(async () => (await stateOf(taskId)).task.status === "completed");
+  let { dispatch } = await stateOf(taskId);
+  assert.equal(dispatch.sessionAlive, true, "the idle agent's session is still there");
+  assert.equal(dispatch.worktreeRemovable, true);
+
+  const res = await call("POST", "/worker-cleanup", { dispatchId: started.id, removeWorktree: true });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.worktree.removed, true);
+  assert.equal(res.body.sessionName, started.sessionName, "the panel is told which session to close");
+  assert.ok(removed.some((r) => r.path === path.join(configHome, "worktrees", dispatch.worktreePath.split("/").pop()!) || r.path.endsWith(dispatch.worktreePath.split("/").pop()!)));
+  ({ dispatch } = await stateOf(taskId));
+  assert.equal(dispatch.worktreeRemovable, false);
+
+  // Closing the session (the panel does it through killSession) shows as gone.
+  sessions.delete(started.sessionName);
+  ({ dispatch } = await stateOf(taskId));
+  assert.equal(dispatch.sessionAlive, false);
+});
+
+test("the run's repo and a path the user gave are never removed", async () => {
+  const { taskId, dispatch: started } = await startedTask("in the repo", "current");
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  await waitFor(async () => (await stateOf(taskId)).task.status === "completed");
+  assert.equal((await stateOf(taskId)).dispatch.worktreeRemovable, false);
+  const before = removed.length;
+  const res = await call("POST", "/worker-cleanup", { dispatchId: started.id, removeWorktree: true });
+  assert.equal(res.body.worktree.removed, false);
+  assert.match(res.body.worktree.reason, /left alone/);
+  assert.equal(removed.length, before, "git was never asked");
+});
+
+test("a dirty worktree is reported, not forced, until the caller says force", async () => {
+  const { taskId, dispatch: started } = await startedTask("dirty", "new");
+  hookSubscription!.onEvent({ event: "stop", paneId: started.paneId, payload: {} });
+  await waitFor(async () => (await stateOf(taskId)).task.status === "completed");
+  const target = removedTargetFor(started);
+  dirtyWorktrees.add(target);
+
+  let res = await call("POST", "/worker-cleanup", { dispatchId: started.id, removeWorktree: true });
+  assert.equal(res.body.worktree.removed, false);
+  assert.equal(res.body.worktree.dirty, true);
+  assert.equal((await stateOf(taskId)).dispatch.worktreeRemovable, true, "still offered");
+
+  res = await call("POST", "/worker-cleanup", { dispatchId: started.id, removeWorktree: true, force: true });
+  assert.equal(res.body.worktree.removed, true);
+  assert.deepEqual(removed.at(-1), { path: target, force: true });
+});
+
+test("a worktree an active worker is using is left alone, and run cleanup reports sessions to close", async () => {
+  const a = await startedTask("first", "new");
+  hookSubscription!.onEvent({ event: "stop", paneId: a.dispatch.paneId, payload: {} });
+  await waitFor(async () => (await stateOf(a.taskId)).task.status === "completed");
+  const worktreeA = removedTargetFor(a.dispatch);
+  // A second worker in the first one's worktree, still running.
+  const b = await startedTask("second", worktreeA, a.runId);
+  assert.equal((await stateOf(a.taskId)).dispatch.worktreeRemovable, false, "in use by b");
+
+  let res = await call("POST", "/run-cleanup", { runId: a.runId, removeWorktrees: true });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.deepEqual(res.body.sessions, [a.dispatch.sessionName], "only the finished worker's session");
+  assert.equal(res.body.worktrees[0].removed, false);
+  assert.match(res.body.worktrees[0].reason, /in use/);
+
+  // Once b is done too, run cleanup removes the worktree and lists both sessions.
+  assert.equal((await verb("done", { dispatchId: b.dispatch.id, outcome: "succeeded" })).status, 200);
+  res = await call("POST", "/run-cleanup", { runId: a.runId, removeWorktrees: true });
+  assert.deepEqual([...res.body.sessions].sort(), [a.dispatch.sessionName, b.dispatch.sessionName].sort());
+  assert.equal(res.body.worktrees.length, 1);
+  assert.equal(res.body.worktrees[0].removed, true);
+});
+
+// The absolute path the fake host created for a "new" worker.
+function removedTargetFor(dispatch: { worktreePath: string }) {
+  return path.join(configHome, "worktrees", dispatch.worktreePath.split("/").pop()!);
+}
 
 test("a second activate() tears the first down instead of failing to bind", async () => {
   server.activate({ router, log: () => {}, getSettings: async () => ({}), host });

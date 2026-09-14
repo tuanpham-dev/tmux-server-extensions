@@ -85,6 +85,26 @@ interface Dispatch {
   lastStatus: string;
   completedBy: string | null;
   lostReason?: string;
+  worktreeMode: "current" | "new" | "path";
+  worktreeRemovedAt?: number | null;
+  // From /state: whether the worker's pane still exists (null when tmux could
+  // not be read), and whether a worktree Agent Tasks created for it can go.
+  sessionAlive: boolean | null;
+  worktreeRemovable: boolean;
+}
+
+// What a worker is waiting on, as the dispatch row says it.
+const AWAITING_LABELS: Record<string, string> = {
+  question: "waiting on your answer",
+  permission: "waiting on a permission prompt",
+  "turn-ended": "stopped without finishing - check its pane",
+};
+
+interface CleanupResult {
+  path: string;
+  removed: boolean;
+  dirty: boolean;
+  reason: string | null;
 }
 
 interface Gate {
@@ -504,6 +524,7 @@ function TaskRow({
   task,
   tasksById,
   dispatch,
+  lastDispatch,
   run,
   now,
   confirm,
@@ -512,6 +533,9 @@ function TaskRow({
   task: Task;
   tasksById: Map<string, Task>;
   dispatch: Dispatch | undefined;
+  // The task's most recent worker, when it is no longer running - for what it
+  // left behind.
+  lastDispatch: Dispatch | undefined;
   run: Run | undefined;
   now: number;
   confirm: (message: string, label?: string) => Promise<boolean>;
@@ -572,7 +596,7 @@ function TaskRow({
           <Icon name={dispatch.awaiting ? "bell" : "loading"} className={dispatch.awaiting ? "" : "codicon-modifier-spin"} />
           <span>
             {dispatch.agentLabel} - {elapsed(dispatch.startedAt, now)}
-            {dispatch.awaiting ? ` - waiting on a ${dispatch.awaiting}` : ""}
+            {dispatch.awaiting ? ` - ${AWAITING_LABELS[dispatch.awaiting] ?? `waiting on ${dispatch.awaiting}`}` : ""}
             {dispatch.lastStatus ? ` - ${dispatch.lastStatus}` : ""}
           </span>
           <button
@@ -586,6 +610,9 @@ function TaskRow({
         </div>
       )}
       {task.outcome && task.outcomeBody && <div className="at-meta at-outcome">{task.outcomeBody}</div>}
+      {lastDispatch && lastDispatch.state !== "active" && (lastDispatch.sessionAlive === true || lastDispatch.worktreeRemovable) && (
+        <Leftovers dispatch={lastDispatch} confirm={confirm} onChanged={onChanged} onError={setError} />
+      )}
       <div className="at-actions">
         {task.allowedActions.map((action) => (
           <button
@@ -621,6 +648,87 @@ function TaskRow({
         />
       )}
     </li>
+  );
+}
+
+// Asks before forcing a dirty worktree out, then retries with force. Returns
+// the paths still left, with why.
+async function forceDirty(
+  results: CleanupResult[],
+  confirm: (message: string, label?: string) => Promise<boolean>,
+  retry: () => Promise<CleanupResult[]>,
+): Promise<string[]> {
+  const dirty = results.filter((r) => r.dirty);
+  let final = results;
+  if (dirty.length > 0) {
+    const ok = await confirm(
+      `${dirty.map((r) => r.path).join(", ")} ${dirty.length === 1 ? "has" : "have"} uncommitted or untracked files. Remove anyway? Those changes are lost; the branch keeps only what was committed.`,
+      "Remove anyway",
+    );
+    if (ok) final = [...results.filter((r) => !r.dirty), ...(await retry())];
+  }
+  return final.filter((r) => !r.removed && !r.dirty && r.reason).map((r) => `${r.path}: ${r.reason}`);
+}
+
+// What a finished worker left behind: its session (the agent idle at its
+// prompt) and a worktree Agent Tasks created for it. Kept until asked, so the
+// work can be reviewed first. The branch is never deleted.
+function Leftovers({
+  dispatch,
+  confirm,
+  onChanged,
+  onError,
+}: {
+  dispatch: Dispatch;
+  confirm: (message: string, label?: string) => Promise<boolean>;
+  onChanged: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const closeSession = async () => {
+    if (!(await confirm(`Close session ${dispatch.sessionName}? Its agent is no longer working on the task.`, "Close session"))) return;
+    app?.killSession(dispatch.sessionName);
+    onChanged();
+  };
+  const removeWorktree = async () => {
+    if (!(await confirm(`Remove the worktree ${dispatch.worktreePath}? Its branch is kept.`, "Remove worktree"))) return;
+    onError(null);
+    try {
+      const attempt = async (force: boolean) =>
+        [(await apiPost<{ worktree: CleanupResult }>("/worker-cleanup", { dispatchId: dispatch.id, removeWorktree: true, force })).worktree];
+      const left = await forceDirty(await attempt(false), confirm, () => attempt(true));
+      if (left.length > 0) onError(left.join("; "));
+    } catch (err) {
+      onError(err instanceof Error ? err.message : String(err));
+    }
+    onChanged();
+  };
+  return (
+    <div className="at-dispatch at-leftovers">
+      <Icon name="archive" />
+      {/* Folder names only - full paths wrap across half the narrow sidebar;
+          the tooltip carries the whole thing. */}
+      <span title={[dispatch.sessionAlive === true ? `session ${dispatch.sessionName}` : "", dispatch.worktreeRemovable ? `worktree ${dispatch.worktreePath}` : ""].filter(Boolean).join("\n")}>
+        Left by the worker:
+        {dispatch.sessionAlive === true && " its session"}
+        {dispatch.sessionAlive === true && dispatch.worktreeRemovable && " and"}
+        {dispatch.worktreeRemovable && ` worktree ${dispatch.worktreePath.split("/").pop()}`}
+      </span>
+      {dispatch.sessionAlive === true && (
+        <>
+          <button type="button" className="icon-button" title={`Open session ${dispatch.sessionName}`} onClick={() => app?.openSessionWindow(dispatch.sessionName)}>
+            <Icon name="terminal" />
+          </button>
+          <button type="button" className="icon-button" title={`Close session ${dispatch.sessionName}`} onClick={() => void closeSession()}>
+            <Icon name="close" />
+          </button>
+        </>
+      )}
+      {dispatch.worktreeRemovable && (
+        <button type="button" className="icon-button" title={`Remove worktree ${dispatch.worktreePath} (keeps the branch)`} onClick={() => void removeWorktree()}>
+          <Icon name="trash" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -714,6 +822,38 @@ function AgentTasksPanel({ actionsTarget, confirmDialog }: SidebarPanelHostProps
 
   const tasksById = useMemo(() => new Map((state?.tasks ?? []).map((t) => [t.id, t])), [state]);
   const dispatchById = useMemo(() => new Map((state?.dispatches ?? []).map((d) => [d.id, d])), [state]);
+  // /state sorts dispatches newest first, so the first seen per task is its latest.
+  const lastDispatchByTask = useMemo(() => {
+    const map = new Map<string, Dispatch>();
+    for (const d of state?.dispatches ?? []) if (!map.has(d.taskId)) map.set(d.taskId, d);
+    return map;
+  }, [state]);
+
+  const cleanUpRun = async (run: Run) => {
+    const finished = (state?.dispatches ?? []).filter((d) => d.runId === run.id && d.state !== "active");
+    const sessionCount = new Set(finished.filter((d) => d.sessionAlive === true).map((d) => d.sessionName)).size;
+    const worktreeCount = new Set(finished.filter((d) => d.worktreeRemovable).map((d) => d.worktreePath)).size;
+    const parts = [
+      sessionCount > 0 ? `close ${sessionCount} finished worker session${sessionCount === 1 ? "" : "s"}` : "",
+      worktreeCount > 0 ? `remove ${worktreeCount} worktree${worktreeCount === 1 ? "" : "s"} Agent Tasks created` : "",
+    ].filter(Boolean);
+    const ok = await confirm(
+      `Clean up "${run.objective}": ${parts.join(" and ")}? Branches are kept, and running workers are not touched.`,
+      "Clean up",
+    );
+    if (!ok) return;
+    try {
+      const attempt = (force: boolean) =>
+        apiPost<{ sessions: string[]; worktrees: CleanupResult[] }>("/run-cleanup", { runId: run.id, removeWorktrees: true, force });
+      const first = await attempt(false);
+      for (const name of first.sessions) app?.killSession(name);
+      const left = await forceDirty(first.worktrees, confirm, async () => (await attempt(true)).worktrees);
+      setError(left.length > 0 ? left.join("; ") : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+    refresh();
+  };
   const openGates = (state?.gates ?? []).filter((g) => g.state === "open");
 
   const header = (
@@ -837,6 +977,18 @@ function AgentTasksPanel({ actionsTarget, confirmDialog }: SidebarPanelHostProps
                 <button type="button" className="icon-button" title="Add task" onClick={() => setAddingTaskTo(run.id)}>
                   <Icon name="add" />
                 </button>
+                {(state.dispatches ?? []).some(
+                  (d) => d.runId === run.id && d.state !== "active" && (d.sessionAlive === true || d.worktreeRemovable),
+                ) && (
+                  <button
+                    type="button"
+                    className="icon-button"
+                    title="Clean up finished workers (close their sessions, remove worktrees Agent Tasks created)"
+                    onClick={() => void cleanUpRun(run)}
+                  >
+                    <Icon name="clear-all" />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="icon-button"
@@ -869,6 +1021,7 @@ function AgentTasksPanel({ actionsTarget, confirmDialog }: SidebarPanelHostProps
                     task={task}
                     tasksById={tasksById}
                     dispatch={task.activeDispatchId ? dispatchById.get(task.activeDispatchId) : undefined}
+                    lastDispatch={lastDispatchByTask.get(task.id)}
                     run={run}
                     now={state.now}
                     confirm={confirm}

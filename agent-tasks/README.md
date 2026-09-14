@@ -19,9 +19,9 @@ what the state machine actually allows.
 
 | Section | What it shows |
 | --- | --- |
-| INBOX | Messages from workers, newest first: `done` reports, `question`s (an `ask`, or an agent waiting on a permission prompt), `escalation`s (a lost worker) and notes. Acknowledge one or all; jump to the worker's session. |
+| INBOX | Messages from workers, newest first: `done` reports, `question`s (an `ask`, or an agent waiting on a permission prompt), `escalation`s (a lost worker, or one that ended its turn without finishing) and notes. Acknowledge one or all; jump to the worker's session. |
 | GATES | Open decisions. One button per option the worker offered, or type an answer. Resolving a gate a worker opened sends the answer to that worker and unblocks its task. |
-| TASKS | Runs and their tasks: status, dependencies, the live worker (agent, elapsed time, what it is waiting on), and one button per allowed action - Start worker, Stop worker, Retry, Complete, Fail, Hold for decision, Delete. |
+| TASKS | Runs and their tasks: status, dependencies, the live worker (agent, elapsed time, what it is waiting on), and one button per allowed action - Start worker, Stop worker, Retry, Complete, Fail, Hold for decision, Delete. Under a finished task, what its worker left behind - its session and a worktree Agent Tasks created - with Open, Close session and Remove worktree. A run's Clean up button does the same for every finished worker in it. |
 | ARCHIVED RUNS | Loaded on demand; Restore brings a run back. |
 
 Task statuses: `pending` (waiting on dependencies), `ready`, `dispatched` (a worker is on it),
@@ -30,19 +30,31 @@ Task statuses: `pending` (waiting on dependencies), `ready`, `dispatched` (a wor
 Stopping a worker and deleting a task or a run ask for confirmation first; stopping a worker
 also kills its tmux session.
 
+A finished worker's session and worktree are **kept** so you can review the work, and removed
+only when you ask. Removing a worktree always keeps its branch, never touches the run's own
+repository or a directory you named, and never one a running worker is using. A worktree with
+uncommitted or untracked files asks a second time before it is forced out.
+
 ## How a worker finishes
 
-In the order they are trusted:
+1. **`agent-task done`**, run by the agent itself, as its brief tells it to. This is the normal
+   way, and the only way to report a failure.
+2. **The agent's own `stop` hook**, for an agent that never uses `agent-task` at all. When its
+   turn ends, core delivers a `stop` event for its tmux pane and the task completes as succeeded.
+   This needs the agent's hooks installed: **Settings → AI Providers → Install for me**. A turn
+   you interrupt (Esc) does not count.
 
-1. **The agent's own `stop` hook.** When the agent's turn ends, core delivers a `stop` event for
-   its tmux pane and the task completes as succeeded. This needs the agent's hooks installed:
-   **Settings → AI Providers → Install for me**. A turn you interrupt (Esc) does not count.
-2. **`agent-task done`**, run by the agent itself, as its brief tells it to. This is how an agent
-   with no hooks finishes, and how any agent reports a failure.
+   Once a worker has used any `agent-task` verb - even just `dispatch-show` - it speaks the
+   protocol, and **a turn ending no longer finishes its task**. A stop without `done` means it
+   stopped early, usually to ask you something in its own UI instead of with `agent-task ask`.
+   The task stays open, the worker shows as *stopped without finishing*, and one escalation lands
+   in the inbox. Answer it in the worker's pane (it clears as soon as the worker uses
+   `agent-task` again), or mark the task complete or failed yourself.
 3. **Neither.** A liveness sweep every 15 seconds marks a worker **lost** as soon as its tmux pane
    is gone, or when it has shown no sign of life (a heartbeat, a check, a message) for
-   `agentTasks.heartbeatTimeoutSeconds`. The task goes back to ready and an escalation lands in
-   the inbox. Nothing is retried automatically.
+   `agentTasks.heartbeatTimeoutSeconds`. A worker waiting on you - an open question, a permission
+   prompt, a turn that ended early - is never timed out, only a gone pane counts. The task goes
+   back to ready and an escalation lands in the inbox. Nothing is retried automatically.
 
 Only a task's current dispatch can finish it: a late `done` from a worker that was already
 lost or replaced is refused.
@@ -136,8 +148,10 @@ through it, just as it could run the agent directly.
 
 ## Known limits
 
-- Disabling the extension removes its routes, but the tmux-server core this was built against
-  gives a server extension no signal to stop, so the control socket and the sweep keep running
-  until the extension is enabled again or the server restarts.
-- A `stop` hook completes the task at the end of the agent's turn. An agent that stops to ask you
-  something in its own UI, rather than with `agent-task ask`, completes its task early.
+- Disabling the extension stops its control socket and sweep only on a tmux-server core that
+  calls a server extension's `deactivate()`. On an older core they keep running until the
+  extension is enabled again or the server restarts.
+- An agent that never uses `agent-task` is finished by its first turn end, so if it stops to ask
+  you something in chat, its task completes early. Agents following the brief do not hit this.
+- The control socket lives under the config directory. A config directory path long enough to
+  push `control.sock` past the 108-byte Unix socket limit stops the extension from starting.

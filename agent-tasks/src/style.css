@@ -193,6 +193,11 @@
   font-size: 11px;
 }
 
+/* What a finished worker left behind - quieter than a running worker's row. */
+.at-leftovers {
+  opacity: 0.8;
+}
+
 .at-dispatch > span:not(.codicon) {
   flex: 1;
   min-width: 0;
