@@ -22,11 +22,6 @@
           "maximum": 3600,
           "description": "How long a worker can go without any sign of life (a heartbeat, a message, a hook event) before its dispatch is marked lost and the task returns to ready. A worker whose pane is gone is marked lost at once, whatever this says."
         },
-        "agentTasks.autoSubmitPreamble": {
-          "type": "boolean",
-          "default": false,
-          "description": "Submit the task brief to a new worker's agent as soon as it is typed. Off by default: the brief is typed into the prompt and waits for you to read it and press Enter."
-        },
         "agentTasks.archiveAfterDays": {
           "type": "integer",
           "default": 30,

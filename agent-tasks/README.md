@@ -62,13 +62,14 @@ Start worker asks for an agent and where to work:
 The server creates the session and types one line into it:
 
 ```sh
-export TS_AGENT_SOCK=... TS_RUN_ID=... TS_TASK_ID=... TS_DISPATCH_ID=...; export PATH='<config>/tmux-server/bin':"$PATH"; <agent launch command>
+export TS_AGENT_SOCK=... TS_RUN_ID=... TS_TASK_ID=... TS_DISPATCH_ID=...; export PATH='<config>/tmux-server/bin':"$PATH"; <agent launch command> '<one-line brief>'
 ```
 
 The launch command is the agent's own, with the global Yolo/Manual choice from
-**Settings → AI Providers** applied. Once the agent is running, a one-line brief is typed into
-its prompt - submitted only if `agentTasks.autoSubmitPreamble` is on. The line assumes a
-POSIX-style shell (bash, zsh) that starts straight to a prompt.
+**Settings → AI Providers** applied. The one-line brief is the agent's first prompt, so the
+worker starts on the task straight away - there is no step where it waits for you to press
+Enter. The agent's CLI must accept an initial prompt argument, as Claude Code and Codex do.
+The line assumes a POSIX-style shell (bash, zsh) that starts straight to a prompt.
 
 ## The worker contract
 
@@ -111,7 +112,6 @@ Any flag value can be `-` to read it from stdin. The ids come from `TS_RUN_ID`, 
 | --- | --- | --- |
 | `agentTasks.worktreeLocation` | `{repo}/.worktrees/{branch}` | Where a new worktree goes. |
 | `agentTasks.heartbeatTimeoutSeconds` | `600` (60-3600) | Silence before a worker is marked lost. A worker whose pane is gone is lost at once. |
-| `agentTasks.autoSubmitPreamble` | `false` | Submit the brief instead of leaving it in the prompt for you to read. |
 | `agentTasks.archiveAfterDays` | `30` (1-365) | Runs whose tasks have all finished are archived this long after their last activity. |
 
 ## Files

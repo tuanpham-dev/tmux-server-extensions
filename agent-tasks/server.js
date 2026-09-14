@@ -46,8 +46,6 @@ import { createStore, newId } from "./store.mjs";
 
 const SWEEP_INTERVAL_MS = 15_000;
 const CHECK_WAIT_MAX_MS = 10 * 60 * 1000;
-const PREAMBLE_WAIT_MS = 20_000;
-const PREAMBLE_SETTLE_MS = 2_000;
 const LAUNCH_SETTLE_MS = 600;
 const INBOX_LIMIT = 200;
 const TITLE_MAX = 200;
@@ -219,7 +217,6 @@ export function activate({ router, log = console.log, getSettings, host }) {
           ? raw["agentTasks.worktreeLocation"].trim()
           : "{repo}/.worktrees/{branch}",
       heartbeatTimeoutMs: (Number.isFinite(timeout) ? Math.min(3600, Math.max(60, timeout)) : 600) * 1000,
-      autoSubmitPreamble: raw["agentTasks.autoSubmitPreamble"] === true,
     };
   }
 
@@ -569,9 +566,17 @@ export function activate({ router, log = console.log, getSettings, host }) {
     // something at startup - zsh's first-run menu for a user with no
     // .zshrc - will still eat the first key; seen live in a scratch HOME.)
     await sleep(LAUNCH_SETTLE_MS);
+    // The brief rides on the launch line as the agent's first prompt rather
+    // than being typed into its TUI afterwards. Typing it was tried: Claude
+    // Code's process shows up as `claude` well before its input box accepts
+    // keys, so a brief typed then was silently dropped and the worker sat idle
+    // (seen live on a real agent - a fake one that is ready instantly hid it).
+    // An argument cannot be dropped. Claude Code and Codex both take an
+    // initial prompt this way; it is submitted, so the worker starts at once.
+    const brief = buildPreambleLine({ run, task, dispatch });
     const line =
       `export TS_AGENT_SOCK=${shellQuote(socketPath)} TS_RUN_ID=${task.runId} TS_TASK_ID=${taskId} TS_DISPATCH_ID=${dispatchId}; ` +
-      `export PATH=${shellQuote(binDir)}:"$PATH"; ${launch}`;
+      `export PATH=${shellQuote(binDir)}:"$PATH"; ${launch} ${shellQuote(brief)}`;
     try {
       await host.sessions.sendText(session.name, line, true, pane.windowIndex);
     } catch (err) {
@@ -582,40 +587,7 @@ export function activate({ router, log = console.log, getSettings, host }) {
       throw err;
     }
 
-    void primeWorker(dispatchId, cfg.autoSubmitPreamble);
     return { dispatchId, dispatch: { ...dispatch, worktreePath: shortenHome(cwd) } };
-  }
-
-  // Types the one-line brief once the agent is actually running in the pane:
-  // text sent while the shell is still starting the CLI is at the mercy of
-  // however that CLI treats input that arrived before it did. Background,
-  // after the route has answered, and it catches everything.
-  async function primeWorker(dispatchId, submit) {
-    try {
-      const deadline = Date.now() + PREAMBLE_WAIT_MS;
-      let dispatch;
-      for (;;) {
-        const doc = await s.get();
-        dispatch = doc.dispatches[dispatchId];
-        if (!dispatch || dispatch.state !== "active" || instance.stopped) return;
-        const { panes } = await allPanes().catch(() => ({ panes: new Map() }));
-        const pane = panes.get(dispatch.paneId);
-        if (pane && dispatch.program && pane.command === dispatch.program) break;
-        if (Date.now() > deadline) break;
-        await sleep(500);
-      }
-      await sleep(PREAMBLE_SETTLE_MS);
-      const doc = await s.get();
-      dispatch = doc.dispatches[dispatchId];
-      if (!dispatch || dispatch.state !== "active") return;
-      const { panes } = await allPanes();
-      const pane = panes.get(dispatch.paneId);
-      if (!pane) return;
-      const text = buildPreambleLine({ run: doc.runs[dispatch.runId], task: doc.tasks[dispatch.taskId], dispatch });
-      await host.sessions.sendText(pane.sessionName, text, submit, pane.windowIndex);
-    } catch (err) {
-      log("could not type the brief for", dispatchId, err?.message ?? err);
-    }
   }
 
   async function stopWorker(body) {

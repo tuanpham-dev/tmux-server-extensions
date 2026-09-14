@@ -114,7 +114,7 @@ before(async () => {
   server.activate({
     router,
     log: () => {},
-    getSettings: async () => ({ "agentTasks.autoSubmitPreamble": false }),
+    getSettings: async () => ({}),
     host,
   });
   await waitFor(() => hookSubscription !== null);
@@ -140,7 +140,20 @@ test("a worker launch records a %-prefixed pane id and types the launch line wit
   const line = typed.find((t) => t.session === dispatch.sessionName);
   assert.ok(line?.submit, "the launch line is submitted");
   assert.match(line.text, new RegExp(`TS_DISPATCH_ID=${dispatch.id}`));
-  assert.match(line.text, /export PATH='.*\/tmux-server\/bin':"\$PATH"; claude$/);
+  assert.match(line.text, /export PATH='.*\/tmux-server\/bin':"\$PATH"; claude '/);
+});
+
+test("the brief is the agent's first prompt on the launch line, not typed in afterwards", async () => {
+  const { dispatch } = await startedTask("brief on launch");
+  const forSession = typed.filter((t) => t.session === dispatch.sessionName);
+  assert.equal(forSession.length, 1, "only the launch line is typed into the worker's pane");
+  const m = forSession[0].text.match(/; claude '(.*)'$/s);
+  assert.ok(m, `launch line ends with the quoted brief: ${forSession[0].text}`);
+  const brief = m[1].replace(/'\\''/g, "'");
+  assert.match(brief, new RegExp(`task ${dispatch.taskId}`));
+  assert.match(brief, new RegExp(`dispatch ${dispatch.id}`));
+  assert.match(brief, /Task: brief on launch\./);
+  assert.doesNotMatch(forSession[0].text, /\n/, "one line - a newline would stall the shell mid-command");
 });
 
 test("an unknown agent is a 400 that names it, not a launch of nothing", async () => {

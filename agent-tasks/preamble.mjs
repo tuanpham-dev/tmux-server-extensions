@@ -4,12 +4,14 @@
 //
 //   buildPreamble      the full multi-line brief, served by
 //                      `agent-task dispatch-show` whenever the worker asks;
-//   buildPreambleLine  one line, typed into the agent's prompt at launch.
+//   buildPreambleLine  one line, passed to the agent as its first prompt on
+//                      the launch line.
 //
-// One line because the typed form goes through tmux send-keys: a newline
-// there is an Enter, and an Enter in an agent's TUI submits whatever has been
-// typed so far - half a brief, sent before the user has read it. The line
-// carries the task and the rules and points at dispatch-show for the rest.
+// One line because the launch line is typed into the pane's shell through
+// tmux send-keys, where a newline is an Enter: inside the quoted argument it
+// would leave the shell waiting on a continuation prompt instead of starting
+// the agent. The line carries the task and the rules and points at
+// dispatch-show for the rest.
 
 const SPEC_LINE_MAX = 1200;
 
