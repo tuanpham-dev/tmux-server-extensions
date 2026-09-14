@@ -1,0 +1,157 @@
+#!/bin/sh
+# agent-task - talk to the Agent Tasks extension from a tmux pane.
+#
+# Installed by the agent-tasks extension into <config>/tmux-server/bin/ and
+# put on PATH by the line that launches a worker, together with the ids below.
+# Every verb is one POST to the extension's 0600 unix socket; the reply is
+# printed as-is. POSIX sh plus curl (--unix-socket) and awk, nothing else.
+#
+#   TS_AGENT_SOCK   the control socket (required)
+#   TS_RUN_ID       run id       -> sent as runId unless --run-id is given
+#   TS_TASK_ID      task id      -> sent as taskId unless --task-id is given
+#   TS_DISPATCH_ID  dispatch id  -> sent as dispatchId unless --dispatch-id is given
+
+usage() {
+  cat <<'USAGE'
+agent-task - report to the Agent Tasks extension from a worker pane
+
+Usage: agent-task <verb> [--flag value ...]
+
+Worker verbs:
+  heartbeat [--status <text>]
+      Say you are still working. Do this every few minutes during long work,
+      or the worker is marked lost.
+  ask --question <text> [--options <a,b,c>]
+      Open a decision gate for the coordinator. Then wait for the answer
+      with: agent-task check --wait
+  check [--wait] [--timeout-ms <ms>] [--ack] [--types <a,b>]
+      Read the next message for this worker (answers to your questions,
+      notes from the coordinator). --wait blocks until one arrives or the
+      timeout passes (default 60000, max 600000). --ack marks it read.
+  send --body <text> [--to <handle>] [--type note|status|question|escalation]
+      Send a message. --to defaults to @coordinator; other handles are
+      @all, @idle, @<program> (e.g. @claude), @worktree:<path>, @task:<id>.
+  done --outcome succeeded|failed --body <summary>
+      Finish the task. Run it exactly once.
+  status
+      Show this worker's dispatch, task and run.
+  dispatch-show
+      Print this worker's brief: the task and the rules.
+
+Coordinator verbs (from any shell):
+  run-create --objective <text> [--repo <path>]
+  task-create (--run-id <id> | --objective <text> [--repo <path>]) --title <text>
+              [--spec <text>] [--deps <id,id>]
+  worker-start --task-id <id> --agent-id <id> [--worktree current|new|<path>]
+  subscribe
+      Stream task, gate and worker transitions as JSON lines.
+
+Any --flag value can be "-" to read the value from stdin, e.g.
+  git diff --stat | agent-task done --outcome succeeded --body -
+
+Environment: TS_AGENT_SOCK (required), TS_RUN_ID, TS_TASK_ID, TS_DISPATCH_ID.
+USAGE
+}
+
+die() {
+  printf 'agent-task: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+# A JSON string literal for $1: backslash, quote and control characters
+# escaped, newlines kept as \n.
+json_string() {
+  printf '%s' "$1" | awk '
+    BEGIN { ORS = ""; print "\"" }
+    {
+      gsub(/\\/, "\\\\")
+      gsub(/"/, "\\\"")
+      gsub(/\t/, "\\t")
+      gsub(/\r/, "\\r")
+      gsub(/[\001-\010\013\014\016-\037]/, "")
+      if (NR > 1) print "\\n"
+      print
+    }
+    END { print "\"" }'
+}
+
+# --kebab-case -> camelCase
+flag_key() {
+  printf '%s' "$1" | awk '{
+    n = split($0, parts, "-"); out = parts[1]
+    for (i = 2; i <= n; i++) out = out toupper(substr(parts[i], 1, 1)) substr(parts[i], 2)
+    print out
+  }'
+}
+
+verb=${1:-help}
+case "$verb" in
+  help | -h | --help) usage; exit 0 ;;
+esac
+shift
+
+case "$verb" in
+  check | send | ask | heartbeat | done | status | dispatch-show | subscribe | run-create | task-create | worker-start) ;;
+  *) die "unknown verb \"$verb\" - run: agent-task help" 2 ;;
+esac
+
+command -v curl >/dev/null 2>&1 || die "curl is required but was not found on PATH"
+
+if [ -z "${TS_AGENT_SOCK-}" ]; then
+  die "TS_AGENT_SOCK is not set - run this from a pane started by Agent Tasks, or export TS_AGENT_SOCK=~/.config/tmux-server/agent-tasks/control.sock"
+fi
+if [ ! -S "$TS_AGENT_SOCK" ]; then
+  die "no socket at $TS_AGENT_SOCK - is the Agent Tasks extension enabled on this tmux-server?"
+fi
+
+body=""
+seen=" "
+add_field() {
+  # $1 key, $2 already-encoded JSON value
+  if [ -n "$body" ]; then body="$body,"; fi
+  body="$body$(json_string "$1"):$2"
+  seen="$seen$1 "
+}
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --*) ;;
+    *) die "unexpected argument \"$1\" - flags look like --name value" 2 ;;
+  esac
+  name=${1#--}
+  shift
+  key=$(flag_key "$name")
+  case "$key" in
+    wait | ack | all)
+      # Boolean flags take no value.
+      add_field "$key" true
+      continue
+      ;;
+  esac
+  [ $# -gt 0 ] || die "--$name needs a value" 2
+  value=$1
+  shift
+  if [ "$value" = "-" ]; then
+    value=$(cat)
+  fi
+  add_field "$key" "$(json_string "$value")"
+done
+
+for pair in "runId:${TS_RUN_ID-}" "taskId:${TS_TASK_ID-}" "dispatchId:${TS_DISPATCH_ID-}"; do
+  key=${pair%%:*}
+  value=${pair#*:}
+  case "$seen" in
+    *" $key "*) continue ;;
+  esac
+  [ -n "$value" ] && add_field "$key" "$(json_string "$value")"
+done
+
+curl_flags="-sS --fail-with-body"
+[ "$verb" = "subscribe" ] && curl_flags="$curl_flags -N"
+
+# shellcheck disable=SC2086 # curl_flags is a deliberate word list
+printf '{%s}' "$body" | curl $curl_flags --unix-socket "$TS_AGENT_SOCK" \
+  -H 'content-type: application/json' --data-binary @- "http://agent-tasks/$verb"
+status=$?
+# JSON replies end in a newline already; keep the terminal tidy for text.
+exit $status

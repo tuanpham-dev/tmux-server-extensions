@@ -1,0 +1,44 @@
+{
+  "name": "agent-tasks",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Agent Tasks",
+  "description": "Orchestrates several AI coding agents from one AGENT TASKS panel: runs of dependency-ordered tasks, each worked by a supervised agent in its own worktree and tmux session, with a coordinator inbox and decision gates. Workers report back through the agent-task CLI and the app's agent hooks, and are tracked by tmux pane id while no browser is open.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "Agent Tasks",
+      "properties": {
+        "agentTasks.worktreeLocation": {
+          "type": "string",
+          "default": "{repo}/.worktrees/{branch}",
+          "description": "Where a worker started with a new worktree gets its checkout. {repo} is the repository root and {branch} the branch made from the task title."
+        },
+        "agentTasks.heartbeatTimeoutSeconds": {
+          "type": "integer",
+          "default": 600,
+          "minimum": 60,
+          "maximum": 3600,
+          "description": "How long a worker can go without any sign of life (a heartbeat, a message, a hook event) before its dispatch is marked lost and the task returns to ready. A worker whose pane is gone is marked lost at once, whatever this says."
+        },
+        "agentTasks.autoSubmitPreamble": {
+          "type": "boolean",
+          "default": false,
+          "description": "Submit the task brief to a new worker's agent as soon as it is typed. Off by default: the brief is typed into the prompt and waits for you to read it and press Enter."
+        },
+        "agentTasks.archiveAfterDays": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "maximum": 365,
+          "description": "Runs whose tasks have all finished move to the archive this many days after their last activity. Archived runs can be restored from the panel."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

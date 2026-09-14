@@ -1,0 +1,33 @@
+{
+  "name": "automations",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "Automations",
+  "description": "Agent work that starts itself: run a prompt through the app's AI, create an Agent Tasks task or start a worker on a daily, interval or cron schedule, or when an Agent Tasks task completes, fails, blocks, opens a gate or loses its worker. Runs on the server, with no browser open.",
+  "icon": "./icon.svg",
+  "contributes": {
+    "configuration": {
+      "title": "Automations",
+      "properties": {
+        "automations.missedRunGraceMinutes": {
+          "type": "integer",
+          "default": 60,
+          "minimum": 0,
+          "maximum": 1440,
+          "description": "When the server starts after being down, a scheduled run it missed fires once if it was due within this many minutes. Older missed runs are skipped and rescheduled. 0 fires nothing missed."
+        },
+        "automations.aiProfile": {
+          "type": "string",
+          "format": "ai-profile",
+          "default": "",
+          "description": "Which AI answers headless automations. Empty uses the default in Settings - AI Providers."
+        }
+      }
+    }
+  },
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

@@ -1,0 +1,388 @@
+/* ---- AGENT TASKS panel ---- */
+
+.at-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.at-empty,
+.at-note,
+.at-error {
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--fg-inactive, #999);
+}
+
+.at-note {
+  color: var(--warning, #e5c07b);
+}
+
+.at-error {
+  color: var(--error, #f48771);
+  overflow-wrap: anywhere;
+}
+
+.at-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--fg-accent, #1085ff);
+  cursor: pointer;
+  font: inherit;
+}
+
+/* Sections */
+
+.at-section-header {
+  display: flex;
+  align-items: center;
+  padding-right: 6px;
+}
+
+.at-section-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: none;
+  border: none;
+  color: var(--fg-inactive, #999);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.at-count {
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--badge-bg, rgba(255, 255, 255, 0.1));
+  color: var(--fg-bright, #ddd);
+  font-weight: 600;
+}
+
+.at-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.at-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 12px;
+}
+
+.at-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.at-meta {
+  color: var(--fg-inactive, #999);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+
+/* Runs and tasks */
+
+.at-run {
+  margin: 2px 0 6px;
+}
+
+.at-run-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px 3px 12px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.06));
+}
+
+.at-run-objective {
+  color: var(--fg-bright, #ddd);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.at-task {
+  padding: 4px 8px 4px 20px;
+}
+
+.at-task:hover {
+  background: var(--list-hover-bg, rgba(255, 255, 255, 0.04));
+}
+
+.at-task-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.at-task-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--fg-bright, #ddd);
+  overflow-wrap: anywhere;
+}
+
+.at-chip {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border: 1px solid currentColor;
+  color: var(--fg-inactive, #999);
+}
+
+.at-chip-ready {
+  color: var(--fg-accent, #1085ff);
+}
+
+.at-chip-dispatched {
+  color: var(--status-active-bg, #98c379);
+}
+
+.at-chip-blocked {
+  color: var(--warning, #e5c07b);
+}
+
+.at-chip-completed {
+  color: var(--git-added-fg, #73c991);
+}
+
+.at-chip-failed {
+  color: var(--error, #f48771);
+}
+
+.at-dep-completed {
+  text-decoration: line-through;
+}
+
+.at-dep-failed {
+  color: var(--error, #f48771);
+}
+
+.at-blocked {
+  color: var(--warning, #e5c07b);
+}
+
+.at-outcome {
+  white-space: pre-wrap;
+}
+
+.at-dispatch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--fg);
+  font-size: 11px;
+}
+
+.at-dispatch > span:not(.codicon) {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.at-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  margin-top: 3px;
+}
+
+.at-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 2px;
+  background: none;
+  border: none;
+  border-radius: 3px;
+  color: var(--fg-inactive, #999);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.at-action:hover,
+.at-action:focus-visible {
+  color: var(--fg-bright, #ddd);
+  background: var(--list-hover-bg, rgba(255, 255, 255, 0.06));
+}
+
+.at-action-delete:hover,
+.at-action-stop-worker:hover,
+.at-action-fail:hover {
+  color: var(--error, #f48771);
+}
+
+/* Inbox */
+
+.at-message {
+  padding: 4px 8px 4px 12px;
+  border-left: 2px solid var(--fg-accent, #1085ff);
+}
+
+.at-message.at-acked {
+  border-left-color: transparent;
+  opacity: 0.65;
+}
+
+.at-message-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.at-message-head .at-meta {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.at-message-actions {
+  display: inline-flex;
+  flex: none;
+}
+
+.at-message-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--fg-bright, #ddd);
+}
+
+.at-type {
+  flex: none;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--fg-inactive, #999);
+}
+
+.at-type-question,
+.at-type-escalation {
+  color: var(--warning, #e5c07b);
+}
+
+.at-type-done {
+  color: var(--git-added-fg, #73c991);
+}
+
+/* Gates */
+
+.at-gate {
+  padding: 6px 8px 6px 12px;
+  border-left: 2px solid var(--warning, #e5c07b);
+  margin-bottom: 4px;
+}
+
+.at-gate-question {
+  color: var(--fg-bright, #ddd);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.at-gate-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.at-gate-free {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.at-gate-free .dialog-input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Forms */
+
+.at-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 8px 8px 12px;
+  padding: 8px;
+  border: 1px solid var(--input-border, rgba(255, 255, 255, 0.1));
+  border-radius: 4px;
+}
+
+.at-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.at-field > span {
+  color: var(--fg-inactive, #999);
+  font-size: 11px;
+}
+
+.at-field .dialog-input {
+  font-size: 12px;
+}
+
+.at-textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.at-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg);
+}
+
+.at-form-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.dialog-button.at-small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+/* Narrow sidebars (a phone): icons carry the task actions on their own. */
+@media (max-width: 480px) {
+  .at-action-label {
+    display: none;
+  }
+
+  .at-action {
+    padding: 4px 6px;
+  }
+
+  .at-actions {
+    gap: 4px;
+  }
+}
