@@ -1,0 +1,131 @@
+/* The CPU/memory/disk readout inside the status bar's popover. One block per
+   figure: a heading row with the percentage right-aligned, a meter, and the
+   raw numbers under it. */
+.sysstats {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.sysstats-empty {
+  padding: 10px 12px;
+  color: var(--fg-inactive);
+}
+
+.sysstats-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sysstats-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sysstats-label {
+  font-weight: 600;
+}
+
+/* Tabular figures so the number doesn't jitter sideways as it ticks. */
+.sysstats-percent {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.sysstats-meter {
+  height: 5px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--list-hover-bg);
+}
+
+/* --fg-accent, not --accent: a theme is free to make focusBorder nearly
+   invisible against the panel (One Dark Pro's is #3e4452c3), and this is a
+   filled mark to be read, not a 1px edge - the same rule theme.ts states for
+   anything rendering an accent color as text. */
+.sysstats-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--fg-accent);
+  transition: width 300ms linear;
+}
+
+.sysstats-meter-fill[data-level="high"] {
+  background: var(--warning);
+}
+
+.sysstats-meter-fill[data-level="critical"] {
+  background: var(--error);
+}
+
+.sysstats-detail,
+.sysstats-note {
+  color: var(--fg-inactive);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The CPU model: worth having, not worth reading twice - and long enough on
+   a server part to wrap the panel wide if left alone. */
+.sysstats-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+/* Which box this is and how long it has been up - one quiet line under the
+   rows, set off the way the ports popover sets off its own footer. */
+.sysstats-summary {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-inactive);
+  font-size: 11.5px;
+}
+
+/* The CPU row's history in place of a meter: a line over the last 2 minutes
+   on a fixed 0-100% scale, newest reading at the right edge. Colored by the
+   latest reading's level, with the same thresholds the meters use. */
+.sysstats-cpu-chart {
+  display: block;
+  width: 100%;
+  height: 48px;
+  margin: 2px 0;
+  border-radius: 3px;
+  background: var(--list-hover-bg);
+  color: var(--fg-accent);
+}
+
+.sysstats-cpu-chart[data-level="high"] {
+  color: var(--warning);
+}
+
+.sysstats-cpu-chart[data-level="critical"] {
+  color: var(--error);
+}
+
+.sysstats-cpu-grid {
+  stroke: var(--border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sysstats-cpu-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sysstats-cpu-area {
+  fill: currentColor;
+  fill-opacity: 0.16;
+  stroke: none;
+}

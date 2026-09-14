@@ -1,0 +1,13 @@
+{
+  "name": "system-stats",
+  "private": true,
+  "publisher": "tmux-server",
+  "version": "1.0.0",
+  "displayName": "System Stats",
+  "description": "Host memory in the status bar. Click it for a popover with a 2-minute CPU chart plus memory, swap, disk and network usage.",
+  "icon": "./icon.svg",
+  "tmuxServer": {
+    "client": "./dist/client.js",
+    "server": "./server.js"
+  }
+}

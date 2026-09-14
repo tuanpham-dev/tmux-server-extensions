@@ -7,6 +7,7 @@ Optional [tmux-server](https://github.com/tuanpham-dev/tmux-server) extensions, 
 | Extension | Type | Source | License |
 |---|---|---|---|
 | Claude Usage & Auto-Retry | a CLAUDE USAGE panel (token burn per 5-hour block, from local transcripts) plus auto-continue after a usage-limit reset (or ask first) | first-party (tmux-server) | MIT |
+| System Stats | memory in use in the status bar; its popover shows a 2-minute CPU chart plus memory, swap, disk and network usage | first-party (tmux-server) | MIT |
 | Agent Monitor | classifies every tmux pane running an agent as working/waiting/done and shows it as a status dot on that window's own PROJECTS-pane row; reads the agent list from Settings → AI Providers and takes its hook events from the app's own pipeline, so every agent in that list gets states, not just Claude Code | first-party (tmux-server) | MIT |
 | Agent Tasks | an AGENT TASKS sidebar tab that orchestrates several agents: runs of dependency-ordered tasks, each worked by a supervised agent in its own session and worktree, with a coordinator inbox, decision gates and an `agent-task` CLI workers report through; completion comes from the agent's hooks, the CLI or a liveness sweep | first-party (tmux-server) | MIT |
 | Automations | an AUTOMATIONS section in the Run tab: ask the AI, create an Agent Tasks task or start a worker on a daily, interval or cron schedule, or when an Agent Tasks task completes, fails, blocks, opens a gate or loses its worker; runs on the server with no browser open | first-party (tmux-server) | MIT |
