@@ -5,7 +5,7 @@
   "publisher": "tmux-server",
   "version": "1.0.0",
   "displayName": "tmux Terminal Backend",
-  "description": "Runs the app's terminals in tmux instead of the bundled terminal daemon, so sessions started with tmux in any terminal show up in the app. Choose it under Settings -> Terminal -> Backend. Needs tmux installed.",
+  "description": "Runs the app's terminals in tmux instead of the bundled terminal daemon, so sessions started with tmux in any terminal show up in the app. Choose it under Settings -> Terminal Backend. Needs tmux installed.",
   "icon": "./icon.svg",
   "tmuxServer": {
     "server": "./server.js"

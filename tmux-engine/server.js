@@ -1,5 +1,5 @@
 // Server hook for the tmux backend: registers tmux as a terminal engine the
-// user can pick in Settings -> Terminal -> Backend. Nothing changes until it is
+// user can pick in Settings -> Terminal Backend. Nothing changes until it is
 // picked and the server restarts; see engine.js for how tmux is driven.
 //
 // TMUX_SERVER_TMUX_SOCKET names a tmux socket (tmux -L) to use instead of the
